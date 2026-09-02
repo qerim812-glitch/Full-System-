@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAuthRouteImport } from './routes/api/auth'
 import { Route as ApiUserRouteImport } from './routes/api/user'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRoute = ApiAuthRouteImport.update({
+  id: '/api/auth',
+  path: '/api/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiUserRoute = ApiUserRouteImport.update({
@@ -25,27 +31,31 @@ const ApiUserRoute = ApiUserRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/auth': typeof ApiAuthRoute
   '/api/user': typeof ApiUserRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/auth': typeof ApiAuthRoute
   '/api/user': typeof ApiUserRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/auth': typeof ApiAuthRoute
   '/api/user': typeof ApiUserRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/user'
+  fullPaths: '/' | '/api/auth' | '/api/user'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/user'
-  id: '__root__' | '/' | '/api/user'
+  to: '/' | '/api/auth' | '/api/user'
+  id: '__root__' | '/' | '/api/auth' | '/api/user'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAuthRoute: typeof ApiAuthRoute
   ApiUserRoute: typeof ApiUserRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth': {
+      id: '/api/auth'
+      path: '/api/auth'
+      fullPath: '/api/auth'
+      preLoaderRoute: typeof ApiAuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/user': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAuthRoute: ApiAuthRoute,
   ApiUserRoute: ApiUserRoute,
 }
 export const routeTree = rootRouteImport

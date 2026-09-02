@@ -534,23 +534,146 @@ async function handleInitialRegistration(event) {
     return;
   }
 
-  console.log('Validation passed, saving user data');
-  currentUser.email = email;
-  currentUser.password = password;
-  currentUser.ageRange = ageRange;
-  currentUser.userId = 'USR-1003';
+  const submitBtn = event.submitter || event.target.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner" style="margin-right:0.5rem;"></span>Creating...';
+  }
+
+  try {
+    const response = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'register', email, password, ageRange }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      if (passwordError) {
+        passwordError.textContent = result.error || 'Could not create account.';
+        passwordError.style.display = 'block';
+      }
+      return;
+    }
+
+    applyAuthenticatedUser(result.user, { email, password });
+    showWelcomeNotification();
+  } catch (error) {
+    console.log('[v0] Registration request failed:', error);
+    if (passwordError) {
+      passwordError.textContent = 'Network error. Please try again.';
+      passwordError.style.display = 'block';
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalLabel;
+    }
+  }
+}
+
+/* Toggle between Login and Register views in the welcome modal */
+function switchAuthMode(mode) {
+  const loginForm = document.getElementById('login-form');
+  const registerForm = document.getElementById('initial-registration-form');
+  const loginTab = document.getElementById('auth-tab-login');
+  const registerTab = document.getElementById('auth-tab-register');
+  const isLogin = mode !== 'register';
+
+  if (loginForm) loginForm.style.display = isLogin ? 'block' : 'none';
+  if (registerForm) registerForm.style.display = isLogin ? 'none' : 'block';
+  if (loginTab) {
+    loginTab.classList.toggle('active', isLogin);
+    loginTab.setAttribute('aria-selected', String(isLogin));
+  }
+  if (registerTab) {
+    registerTab.classList.toggle('active', !isLogin);
+    registerTab.setAttribute('aria-selected', String(!isLogin));
+  }
+}
+
+/* Log in an existing Supabase user */
+async function handleLogin(event) {
+  event.preventDefault();
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const loginError = document.getElementById('login-error');
+
+  if (loginError) loginError.style.display = 'none';
+
+  if (!email || !password) {
+    if (loginError) {
+      loginError.textContent = 'Please enter your email and password.';
+      loginError.style.display = 'block';
+    }
+    return;
+  }
+
+  const submitBtn = event.submitter || event.target.querySelector('button[type="submit"]');
+  const originalLabel = submitBtn ? submitBtn.innerHTML : '';
+  if (submitBtn) {
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner" style="margin-right:0.5rem;"></span>Logging in...';
+  }
+
+  try {
+    const response = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', email, password }),
+    });
+    const result = await response.json();
+
+    if (!response.ok) {
+      if (loginError) {
+        loginError.textContent = result.error || 'Invalid email or password.';
+        loginError.style.display = 'block';
+      }
+      return;
+    }
+
+    applyAuthenticatedUser(result.user, { email, password });
+
+    if (result.user && result.user.isAdmin) {
+      showToast('Welcome back, admin!', 'success');
+      setTimeout(() => {
+        window.location.href = 'admin.html';
+      }, 800);
+    }
+  } catch (error) {
+    console.log('[v0] Login request failed:', error);
+    if (loginError) {
+      loginError.textContent = 'Network error. Please try again.';
+      loginError.style.display = 'block';
+    }
+  } finally {
+    if (submitBtn) {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = originalLabel;
+    }
+  }
+}
+
+/* Shared: persist the authenticated user and close the welcome modal */
+function applyAuthenticatedUser(user, credentials) {
+  currentUser.email = (user && user.email) || credentials.email;
+  currentUser.password = credentials.password;
+  currentUser.ageRange = (user && user.ageRange) || currentUser.ageRange || '';
+  currentUser.isAdmin = Boolean(user && user.isAdmin);
+  currentUser.userId = currentUser.userId || 'USR-1003';
   if (!currentUser.bookings) currentUser.bookings = [];
-  await saveUserState();
+  saveUserState();
 
   const welcomeModal = document.getElementById('welcome-modal');
   if (welcomeModal) {
     welcomeModal.style.display = 'none';
-    const form = document.getElementById('initial-registration-form');
-    if (form) form.reset();
-    console.log('Modal hidden');
+    const registerForm = document.getElementById('initial-registration-form');
+    if (registerForm) registerForm.reset();
+    const loginForm = document.getElementById('login-form');
+    if (loginForm) loginForm.reset();
   }
   updateAccountUI();
-  showWelcomeNotification();
 }
 
 function updateAccountUI() {
@@ -1038,6 +1161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   const initialRegistrationForm = document.getElementById('initial-registration-form');
   if (initialRegistrationForm) {
     initialRegistrationForm.addEventListener('submit', handleInitialRegistration);
+  }
+
+  const loginForm = document.getElementById('login-form');
+  if (loginForm) {
+    loginForm.addEventListener('submit', handleLogin);
   }
 
   const donationForm = document.getElementById('donation-form');
