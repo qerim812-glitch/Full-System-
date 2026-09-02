@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Social Circle - Donations</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="logo" style="text-decoration: none; color: inherit;">The Social Circle</a>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <button id="theme-toggle" type="button" style="background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;" title="Toggle dark mode">🌙</button>
+      <button id="hamburger-menu" class="hamburger" type="button" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="nav-links">
+        <a class="nav-link" data-page="index" href="index.html">Home</a>
+        <a class="nav-link" data-page="booking" href="booking.html">Bookings</a>
+        <a class="nav-link" data-page="chat" href="chat.html">Community Chat</a>
+        <a class="nav-link" data-page="dm" href="dm.html">Private DMs</a>
+        <a class="nav-link" data-page="account" href="account.html">My Account</a>
+        <a class="nav-link active" data-page="donations" href="donations.html">Donations</a>
+        <a class="nav-link" data-page="report" href="report.html">Report a User</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <h2 style="text-align: center;">Support The Social Circle</h2>
+    <br>
+    <video width="560" height="315" controls style="max-width: 100%; height: auto; display: block; margin: 0 auto;">
+      <source src="video1.mp4" type="video/mp4">
+    </video>
+    <br>
+
+    <p style="color: var(--text-muted); text-align: center; margin-bottom: 2rem;">Donate online via Visa, Mastercard, PayPal, Bitcoin, and all existing online or crypto payment options.</p>
+
+    <div class="booking-form" style="max-width: 650px; margin: 0 auto;">
+      <h3>Online Payment & Support</h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1.5rem;">Select your preferred online payment method below to make a contribution:</p>
+
+      <div id="donation-success" class="alert-success">Thank you! Your donation transaction has been processed successfully.</div>
+
+      <form id="donation-form">
+        <div class="form-group">
+          <label for="donation-amount">Donation Amount ($ USD) *</label>
+          <input type="number" id="donation-amount" min="1" step="any" placeholder="e.g. 10.00" required>
+        </div>
+
+        <div class="form-group">
+          <label for="payment-method">Payment Method *</label>
+          <select id="payment-method" required onchange="togglePaymentDetails(this.value)">
+            <option value="" disabled selected>Select a payment method</option>
+            <option value="stripe">Stripe Checkout</option>
+            <option value="bank">Bank Transfer</option>
+            <option value="card">Credit / Debit Card</option>
+            <option value="paypal">PayPal</option>
+            <option value="wallets">Digital Wallets</option>
+            <option value="bitcoin">Bitcoin (BTC)</option>
+            <option value="crypto">Other Cryptocurrencies</option>
+            <option value="online">Other Online Payments</option>
+          </select>
+        </div>
+
+        <div id="stripe-fields" style="display: none;">
+          <div class="bank-box">
+            <strong>Stripe Checkout:</strong> Secure card payment powered by Stripe.<br>
+            Replace the example checkout URL in the page code with your live Stripe payment link before publishing.
+          </div>
+        </div>
+
+        <div id="card-fields" style="display: none;">
+          <div class="form-group">
+            <label for="card-number">Card Number</label>
+            <input type="text" id="card-number" placeholder="4532 •••• •••• ••••">
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="card-expiry">MM/YY</label>
+              <input type="text" id="card-expiry" placeholder="12/28">
+            </div>
+            <div class="form-group">
+              <label for="card-cvv">CVC/CVV</label>
+              <input type="text" id="card-cvv" placeholder="123">
+            </div>
+          </div>
+        </div>
+
+        <div id="bank-fields" style="display: none;">
+          <label>Bank Account Details:</label>
+          <div class="bank-box" id="bank-details-display">
+            <strong>Account Holder:</strong> Your Name or Business Name<br>
+            <strong>Bank:</strong> Your Bank Name<br>
+            <strong>IBAN:</strong> AL47 0000 0000 0000 0000 0000 0000<br>
+            <strong>SWIFT/BIC:</strong> ABCDALBB<br>
+            <strong>Reference:</strong> Donation to The Social Circle
+          </div>
+          <button type="button" class="btn-primary" onclick="copyBankDetails()" style="width: 100%; margin-top: 1rem;">Copy Bank Details</button>
+        </div>
+
+        <div id="crypto-fields" style="display: none;">
+          <label>Send Crypto to Official Address:</label>
+          <div class="crypto-box" id="crypto-address-display">
+            Select a cryptocurrency option above to view target address.
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%; margin-top: 1rem;">Complete Donation</button>
+      </form>
+    </div>
+  </main>
+
+  <footer>
+    <p>© 2026 The Social Circle. All Rights Reserved.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

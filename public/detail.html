@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Social Circle - Place Details</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="logo" style="text-decoration: none; color: inherit;">The Social Circle</a>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <button id="theme-toggle" type="button" style="background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;" title="Toggle dark mode">🌙</button>
+      <button id="hamburger-menu" class="hamburger" type="button" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="nav-links">
+        <a class="nav-link" data-page="index" href="index.html">Home</a>
+        <a class="nav-link" data-page="booking" href="booking.html">Bookings</a>
+        <a class="nav-link" data-page="chat" href="chat.html">Community Chat</a>
+        <a class="nav-link" data-page="dm" href="dm.html">Private DMs</a>
+        <a class="nav-link" data-page="account" href="account.html">My Account</a>
+        <a class="nav-link" data-page="donations" href="donations.html">Donations</a>
+        <a class="nav-link" data-page="report" href="report.html">Report a User</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <a href="booking.html" style="background: none; border: none; color: var(--primary); cursor: pointer; margin-bottom: 1rem; font-weight: 600; display: inline-block; text-decoration: none;">← Back to Places List</a>
+
+    <div class="detail-header" id="detail-header"></div>
+
+    <div class="booking-form">
+      <h3>Complete Reservation</h3>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Confirm your reservation details below.</p>
+
+      <div id="booking-error" class="alert-error">You are outside of your age range! You cannot book here.</div>
+
+      <form id="reservation-form">
+        <div class="form-group" id="location-select-container" style="display: none;">
+          <label for="booking-location">Select Specific Location *</label>
+          <select id="booking-location"></select>
+        </div>
+        <div class="form-group">
+          <label for="user-email">Email Address</label>
+          <input type="email" id="user-email" required placeholder="you@example.com">
+        </div>
+        <div class="form-group">
+          <label for="user-password">Password</label>
+          <input type="password" id="user-password" required placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label for="user-age-display">Your Registered Age Range</label>
+          <input type="text" id="user-age-display" required readonly style="background-color: #e2e8f0;">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="booking-date">Date *</label>
+            <input type="date" id="booking-date" required>
+          </div>
+          <div class="form-group">
+            <label for="booking-time">Time *</label>
+            <input type="time" id="booking-time" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-primary" style="width: 100%;">Confirm Booking</button>
+      </form>
+    </div>
+
+    <h2>Other Hotspots in Tirana</h2>
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem;">Check out other venues available for booking.</p>
+    <div class="grid" id="detail-other-places-grid"></div>
+  </main>
+
+  <div id="booking-confirmation-modal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85); align-items: center; justify-content: center; z-index: 2000;">
+    <div class="modal-box" style="background: var(--card-bg); color: var(--text); padding: 2.5rem; border-radius: 14px; max-width: 480px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 2px solid var(--primary);">
+      <div style="text-align: center; margin-bottom: 1.5rem;">
+        <h2 style="color: #4CAF50; margin: 0; font-size: 1.8rem;">✓ Booking Confirmed!</h2>
+        <p style="color: var(--text-muted); font-size: 0.9rem; margin: 0.5rem 0 0 0;">Your reservation has been saved.</p>
+      </div>
+
+      <div style="background: var(--bg); color: var(--text); padding: 1.5rem; border-radius: 10px; margin-bottom: 1.5rem; text-align: left; border-left: 4px solid var(--primary);">
+        <div style="display:grid;gap:0.75rem;">
+          <div><strong style="color:var(--primary);">📍 Venue:</strong> <span id="confirm-place" style="font-size:1.1rem;"></span></div>
+          <div><strong style="color:var(--primary);">📅 Date:</strong> <span id="confirm-date"></span></div>
+          <div><strong style="color:var(--primary);">🕐 Time:</strong> <span id="confirm-time"></span></div>
+          <div><strong style="color:var(--primary);">✉️ Email:</strong> <span id="confirm-email" style="word-break:break-all;"></span></div>
+          <div><strong style="color:var(--primary);">👤 User ID:</strong> <span id="confirm-userid"></span></div>
+        </div>
+      </div>
+
+      <button class="btn-primary" style="width: 100%; background: #4CAF50; margin-bottom: 0.5rem;" onclick="window.location.href='account.html'">✓ View in My Bookings</button>
+      <button class="btn-primary" style="width: 100%; background: var(--primary);" onclick="window.location.href='index.html'">← Back to Home</button>
+    </div>
+  </div>
+
+  <footer>
+    <p>© 2026 The Social Circle. All Rights Reserved.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

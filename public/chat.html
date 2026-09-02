@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Social Circle - Community Chat</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav role="navigation" aria-label="Main navigation">
+    <a href="index.html" class="logo" style="text-decoration: none; color: inherit;">The Social Circle</a>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <button id="theme-toggle" type="button" style="background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;" title="Toggle dark mode">🌙</button>
+      <button id="hamburger-menu" class="hamburger" type="button" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="nav-links">
+        <a class="nav-link" data-page="index" href="index.html">Home</a>
+        <a class="nav-link" data-page="booking" href="booking.html">Bookings</a>
+        <a class="nav-link active" data-page="chat" href="chat.html">Community Chat</a>
+        <a class="nav-link" data-page="dm" href="dm.html">Private DMs</a>
+        <a class="nav-link" data-page="account" href="account.html">My Account</a>
+        <a class="nav-link" data-page="donations" href="donations.html">Donations</a>
+        <a class="nav-link" data-page="report" href="report.html">Report a User</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <h2 style="text-align: center;">Community Chat Room</h2>
+    <p style="color: var(--text-muted); text-align: center; margin-bottom: 1.5rem;">Connect with other members in Tirana in real-time.</p>
+
+    <div class="chat-container">
+      <div class="chat-header">
+        <strong>💬 Live Tirana Social Chat</strong>
+        <span style="font-size: 0.85rem; color: var(--text-muted);">Messages Sent: <strong id="chat-count-display">0</strong> / 10</span>
+      </div>
+
+      <div class="chat-banner">
+        YOU ONLY CAN SEND MAX 10 CHATS !!!
+      </div>
+
+      <div id="chat-error-banner" class="alert-error" role="alert" aria-live="assertive" style="border-radius: 0; margin-bottom: 0;">
+        Chat limit reached (10/10). You cannot send more messages.
+      </div>
+
+      <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-label="Community chat messages">
+        <div class="chat-msg other">
+          <span class="chat-sender">System</span>
+          Welcome to Tirana Social Chat! Feel free to chat with others in town.
+        </div>
+        <div class="chat-msg other">
+          <span class="chat-sender">USR-1001</span>
+          Hey everyone! Anyone hanging out at Moncherie in Bllok tonight?
+        </div>
+      </div>
+
+      <div class="chat-input-area">
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" placeholder="Type your message here..." aria-label="Chat message" maxlength="500" required>
+          <button type="submit" id="chat-send-btn" class="btn-primary">Send</button>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <p>© 2026 The Social Circle. All Rights Reserved.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

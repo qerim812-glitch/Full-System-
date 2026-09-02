@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Social Circle - Bookings</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <nav>
+    <a href="index.html" class="logo" style="text-decoration: none; color: inherit;">The Social Circle</a>
+    <div style="display:flex;align-items:center;gap:1rem;">
+      <button id="theme-toggle" type="button" style="background:none;border:none;font-size:1.5rem;cursor:pointer;padding:0.5rem;" title="Toggle dark mode">🌙</button>
+      <button id="hamburger-menu" class="hamburger" type="button" aria-label="Menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="nav-links">
+        <a class="nav-link" data-page="index" href="index.html">Home</a>
+        <a class="nav-link active" data-page="booking" href="booking.html">Bookings</a>
+        <a class="nav-link" data-page="chat" href="chat.html">Community Chat</a>
+        <a class="nav-link" data-page="dm" href="dm.html">Private DMs</a>
+        <a class="nav-link" data-page="account" href="account.html">My Account</a>
+        <a class="nav-link" data-page="donations" href="donations.html">Donations</a>
+        <a class="nav-link" data-page="report" href="report.html">Report a User</a>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    <h2>Book a Spot in Tirana</h2>
+    <p style="color: var(--text-muted); margin-bottom: 1rem;">Click 'Book Here' on any spot to view the dedicated location page and reserve a table.</p>
+    <input type="text" id="venue-search" class="search-bar" placeholder="🔍 Search venues by name or description..." />
+    <div class="grid" id="booking-grid"></div>
+  </main>
+
+  <footer>
+    <p>© 2026 The Social Circle. All Rights Reserved.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
