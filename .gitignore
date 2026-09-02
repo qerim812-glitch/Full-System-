@@ -26,3 +26,9 @@ yarn-error.log*
 Thumbs.db
 .idea/
 .vscode/
+
+# Build output (nitro / wrangler)
+.output/
+.wrangler/
+.nitro/
+.tanstack/
