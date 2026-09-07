@@ -38,8 +38,27 @@ export const fetchAdminOverview = createServerFn({ method: "GET" }).handler(
         .select("id", { count: "exact", head: true })
         .in("status", ["open", "reviewing"]),
       supabase.from("profiles").select("id", { count: "exact", head: true }),
-      supabase.from("venues").select("id", { count: "exact", head: true }),
+      // `slug`, not `id`: public.venues is keyed by slug and has no id column,
+      // so selecting id errored and this tile silently always read zero.
+      supabase.from("venues").select("slug", { count: "exact", head: true }),
     ]);
+
+    // A count query that errors returns count: null, which `?? 0` renders as
+    // a plausible-looking zero. Log it so a broken tile is visible rather
+    // than quietly wrong.
+    for (const [label, result] of [
+      ["bookings", bookings],
+      ["reports", openReports],
+      ["profiles", profiles],
+      ["venues", venues],
+    ] as const) {
+      if (result.error) {
+        console.error(
+          `[admin] overview count failed for ${label}:`,
+          result.error.message,
+        );
+      }
+    }
 
     return {
       confirmedBookings: bookings.count ?? 0,

@@ -54,36 +54,49 @@ export const fetchVenue = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
 
-    const [venueResult, locationsResult, reviewsResult] = await Promise.all([
-      supabase
-        .from("venues")
-        .select(
-          "slug, name, description, image_url, location_url, min_age, max_age, capacity",
-        )
-        .eq("slug", data.slug)
-        .maybeSingle(),
-      supabase
-        .from("venue_locations")
-        .select("id, venue_slug, name")
-        .eq("venue_slug", data.slug)
-        .eq("is_active", true)
-        .order("name"),
-      supabase
-        .from("reviews")
-        .select("id, rating, comment, created_at")
-        .eq("venue_slug", data.slug)
-        .eq("is_hidden", false)
-        .order("created_at", { ascending: false })
-        .limit(20),
-    ]);
+    const [venueResult, locationsResult, reviewsResult, ratingsResult] =
+      await Promise.all([
+        supabase
+          .from("venues")
+          .select(
+            "slug, name, description, image_url, location_url, min_age, max_age, capacity",
+          )
+          .eq("slug", data.slug)
+          .maybeSingle(),
+        supabase
+          .from("venue_locations")
+          .select("id, venue_slug, name")
+          .eq("venue_slug", data.slug)
+          .eq("is_active", true)
+          .order("name"),
+        // The 20 most recent, for display.
+        supabase
+          .from("reviews")
+          .select("id, rating, comment, created_at")
+          .eq("venue_slug", data.slug)
+          .eq("is_hidden", false)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        // Every visible rating, for the aggregate. Deliberately a separate
+        // query: averaging the display page above would compute the score
+        // from only the newest 20 reviews, so a venue with 50 reviews would
+        // show a rating and a count that are both simply wrong. One smallint
+        // per review keeps this cheap.
+        supabase
+          .from("reviews")
+          .select("rating")
+          .eq("venue_slug", data.slug)
+          .eq("is_hidden", false),
+      ]);
 
     if (venueResult.error || !venueResult.data) {
       return null;
     }
 
     const reviews = reviewsResult.data ?? [];
-    const { count: reviewCount, average: averageRating } =
-      summarizeReviews(reviews);
+    const { count: reviewCount, average: averageRating } = summarizeReviews(
+      ratingsResult.data ?? [],
+    );
 
     return {
       venue: venueResult.data as Venue,
