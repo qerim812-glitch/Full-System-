@@ -17,8 +17,9 @@ Run these **in order**. Each depends on the ones before it.
 | 6 | `migrations/0006_messaging.sql` | `blocks`, `chat_messages`, `direct_messages` |
 | 7 | `migrations/0007_moderation.sql` | `reports`, `audit_log` |
 | 8 | `migrations/0008_donations.sql` | `donations` |
-| 9 | `seed/0001_venues.sql` | The 7 venues |
-| 10 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
+| 9 | `migrations/0009_booking_completion.sql` | `complete_past_bookings()` + its pg_cron schedule |
+| 10 | `seed/0001_venues.sql` | The 7 venues |
+| 11 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
 
 ### Option A — Supabase SQL Editor
 
@@ -94,11 +95,18 @@ live project, change that account's password.
   policy on `bookings`, so the client SDK cannot write the table directly and
   bypass capacity or age checks. The function takes a row lock on the venue
   before counting seats, which is what makes it safe under concurrent load.
+- **Bookings must reach `completed` or reviews break.** `0009` adds
+  `complete_past_bookings()` and schedules it every 15 minutes via pg_cron.
+  Without it nothing ever sets `status = 'completed'`, so the
+  "reviews: write own after visiting" policy in `0005` can never be
+  satisfied and every review insert is rejected. **pg_cron must be enabled**
+  (Dashboard > Database > Extensions); the migration raises a warning rather
+  than failing the whole file if it is not.
 - **Blocking ships with messaging**, in the same migration, not as a
   follow-up.
 - **`audit_log` is append-only** — no update or delete policy exists for
   anyone, admins included.
-- **Money is stored in minor units** (`amount_minor` integer), never a float.
+- **Money is stored in minor units** (`amount_minor` bigint), never a float.
 
 ## Changing the age policy
 
