@@ -1,11 +1,19 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { FavoriteButton } from "../../components/FavoriteButton";
 import { Input } from "../../components/ui/input";
+import { fetchMyFavorites } from "../../lib/favorites";
 import { fetchVenues, type Venue } from "../../lib/venues";
 
 export const Route = createFileRoute("/_authed/venues")({
-  loader: async () => ({ venues: await fetchVenues() }),
+  loader: async () => {
+    const [venues, favorites] = await Promise.all([
+      fetchVenues(),
+      fetchMyFavorites(),
+    ]);
+    return { venues, favorites };
+  },
   component: VenuesPage,
   errorComponent: () => (
     <EmptyState
@@ -16,8 +24,9 @@ export const Route = createFileRoute("/_authed/venues")({
 });
 
 function VenuesPage() {
-  const { venues } = Route.useLoaderData();
+  const { venues, favorites } = Route.useLoaderData();
   const [query, setQuery] = useState("");
+  const favoriteSet = new Set(favorites);
 
   const term = query.trim().toLowerCase();
   const visible = term
@@ -64,7 +73,11 @@ function VenuesPage() {
       ) : (
         <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((venue) => (
-            <VenueCard key={venue.slug} venue={venue} />
+            <VenueCard
+              key={venue.slug}
+              venue={venue}
+              favorited={favoriteSet.has(venue.slug)}
+            />
           ))}
         </ul>
       )}
@@ -72,9 +85,17 @@ function VenuesPage() {
   );
 }
 
-function VenueCard({ venue }: { venue: Venue }) {
+function VenueCard({ venue, favorited }: { venue: Venue; favorited: boolean }) {
   return (
-    <li className="flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md">
+    // `relative` makes this the positioning context for the favourite button,
+    // which is a sibling of the Link rather than a child: a <button> nested
+    // inside an <a> is invalid HTML.
+    <li className="relative flex flex-col overflow-hidden rounded-lg border border-border bg-card transition-shadow hover:shadow-md">
+      <FavoriteButton
+        venueSlug={venue.slug}
+        initialFavorited={favorited}
+        className="absolute right-2 top-2 z-10"
+      />
       <Link
         to="/venues/$slug"
         params={{ slug: venue.slug }}
