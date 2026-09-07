@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import { getSupabaseServerClient } from "./supabase/server";
+import { summarizeReviews } from "./reviews";
 
 /**
  * Shapes mirror the SQL in supabase/migrations/0003_venues.sql.
@@ -81,16 +82,15 @@ export const fetchVenue = createServerFn({ method: "GET" })
     }
 
     const reviews = reviewsResult.data ?? [];
-    const averageRating =
-      reviews.length > 0
-        ? reviews.reduce((sum, r) => sum + (r.rating ?? 0), 0) / reviews.length
-        : null;
+    const { count: reviewCount, average: averageRating } =
+      summarizeReviews(reviews);
 
     return {
       venue: venueResult.data as Venue,
       locations: (locationsResult.data ?? []) as VenueLocation[],
       reviews,
       averageRating,
+      reviewCount,
     };
   });
 
