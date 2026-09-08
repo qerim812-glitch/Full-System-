@@ -3,13 +3,14 @@ import { useState } from "react";
 
 import { FavoriteButton } from "../../components/FavoriteButton";
 import { ReviewForm } from "../../components/ReviewForm";
+import { VenueChat } from "../../components/VenueChat";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { createBooking } from "../../lib/bookings";
 import { fetchMyFavorites } from "../../lib/favorites";
-import { fetchMyReview } from "../../lib/reviews";
+import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
 import { fetchVenue } from "../../lib/venues";
 
 const TIME_SLOTS = [
@@ -21,14 +22,15 @@ const TIME_SLOTS = [
   "23:00",
 ] as const;
 
-export const Route = createFileRoute("/_authed/venues/$slug")({
+export const Route = createFileRoute("/_authed/venues_/$slug")({
   loader: async ({ params }) => {
-    const [detail, favorites, myReview] = await Promise.all([
+    const [detail, favorites, myReview, canReview] = await Promise.all([
       fetchVenue({ data: { slug: params.slug } }),
       fetchMyFavorites(),
       fetchMyReview({ data: { venueSlug: params.slug } }),
+      canReviewVenue({ data: { venueSlug: params.slug } }),
     ]);
-    return { detail, favorites, myReview };
+    return { detail, favorites, myReview, canReview };
   },
   component: VenueDetailPage,
 });
@@ -38,7 +40,7 @@ function todayIso() {
 }
 
 function VenueDetailPage() {
-  const { detail, favorites, myReview } = Route.useLoaderData();
+  const { detail, favorites, myReview, canReview } = Route.useLoaderData();
   const router = useRouter();
 
   const [date, setDate] = useState(todayIso());
@@ -179,7 +181,14 @@ function VenueDetailPage() {
               Reviews {reviews.length > 0 ? `(${reviews.length})` : ""}
             </h2>
 
-            <ReviewForm venueSlug={venue.slug} existing={myReview} />
+            {canReview || myReview ? (
+              <ReviewForm venueSlug={venue.slug} existing={myReview} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                You can leave a review once you have visited. Book a table and
+                your review opens up after the booking date passes.
+              </p>
+            )}
 
             {reviews.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -205,6 +214,8 @@ function VenueDetailPage() {
               </ul>
             )}
           </section>
+
+          <VenueChat venueSlug={venue.slug} />
         </div>
 
         {/* Booking form */}

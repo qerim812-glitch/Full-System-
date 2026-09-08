@@ -87,6 +87,33 @@ export const fetchMyReview = createServerFn({ method: "GET" })
   });
 
 /**
+ * Whether the caller has actually visited, and so may leave a review.
+ *
+ * Mirrors the condition in the "reviews: write own after visiting" policy.
+ * Without this the form is offered to everyone and the requirement only
+ * surfaces as an RLS rejection after they have written something.
+ *
+ * The RLS "bookings: read own" policy scopes the count to the caller.
+ */
+export const canReviewVenue = createServerFn({ method: "GET" })
+  .validator((data: unknown) => venueOnlySchema.parse(data))
+  .handler(async ({ data }): Promise<boolean> => {
+    const supabase = getSupabaseServerClient();
+
+    const { count, error } = await supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("venue_slug", data.venueSlug)
+      .eq("status", "completed");
+
+    if (error) {
+      console.error("[reviews] canReviewVenue failed:", error.message);
+      return false;
+    }
+    return (count ?? 0) > 0;
+  });
+
+/**
  * Upsert on the (user_id, venue_slug) unique constraint so a second
  * submission updates rather than errors.
  *
