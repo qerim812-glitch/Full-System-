@@ -39,6 +39,7 @@ const NAV = [
   { to: "/favourites", label: "Favourites" },
   { to: "/bookings", label: "My bookings" },
   { to: "/messages", label: "Messages" },
+  { to: "/donate", label: "Donate" },
   { to: "/account", label: "Account" },
 ] as const;
 

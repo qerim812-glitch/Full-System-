@@ -1,14 +1,22 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { fetchMyBlocks, unblockUser } from "../../lib/messaging";
 import { exportMyData, fetchMyProfile, updateProfile } from "../../lib/profile";
 
 export const Route = createFileRoute("/_authed/account")({
-  loader: async () => ({ profile: await fetchMyProfile() }),
+  loader: async () => {
+    const [profile, blocks] = await Promise.all([
+      fetchMyProfile(),
+      fetchMyBlocks(),
+    ]);
+    return { profile, blocks };
+  },
   component: AccountPage,
 });
 
@@ -22,7 +30,7 @@ function ageFrom(iso: string): number {
 }
 
 function AccountPage() {
-  const { profile } = Route.useLoaderData();
+  const { profile, blocks } = Route.useLoaderData();
   const { user } = Route.useRouteContext();
   const router = useRouter();
 
@@ -47,8 +55,21 @@ function AccountPage() {
     setBusy(false);
   }
 
+  async function handleUnblock(userId: string) {
+    const result = await unblockUser({ data: { userId } });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    await router.invalidate();
+  }
+
   async function handleExport() {
     const data = await exportMyData();
+    if (!data) {
+      toast.error("Could not build your export. Please sign in again.");
+      return;
+    }
     // Build the file in the browser: the data never leaves the user's session.
     const blob = new Blob([JSON.stringify(data, null, 2)], {
       type: "application/json",
@@ -129,13 +150,46 @@ function AccountPage() {
             </div>
           </dl>
 
+          <section className="flex flex-col gap-3 border-t border-border pt-6">
+            <h2 className="text-base font-semibold text-foreground">
+              Blocked people
+            </h2>
+            {blocks.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                You have not blocked anyone. Blocking someone hides their
+                messages and stops them contacting you.
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {blocks.map((person) => (
+                  <li
+                    key={person.id}
+                    className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2"
+                  >
+                    <span className="text-sm text-foreground">
+                      {person.name}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void handleUnblock(person.id)}
+                    >
+                      Unblock
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
           <section className="flex flex-col gap-2 border-t border-border pt-6">
             <h2 className="text-base font-semibold text-foreground">
               Your data
             </h2>
             <p className="text-sm text-muted-foreground">
               Download everything NewPop holds about you — profile, bookings,
-              reviews, favourites, reports and donations — as a JSON file.
+              reviews, favourites, reports, donations and messages — as a JSON
+              file.
             </p>
             <Button
               variant="outline"

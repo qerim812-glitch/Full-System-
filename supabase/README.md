@@ -18,8 +18,9 @@ Run these **in order**. Each depends on the ones before it.
 | 7 | `migrations/0007_moderation.sql` | `reports`, `audit_log` |
 | 8 | `migrations/0008_donations.sql` | `donations` |
 | 9 | `migrations/0009_booking_completion.sql` | `complete_past_bookings()` + its pg_cron schedule |
-| 10 | `seed/0001_venues.sql` | The 7 venues |
-| 11 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
+| 10 | `migrations/0010_profile_visibility.sql` | `public_profiles` view + `blocked_user_ids()` |
+| 11 | `seed/0001_venues.sql` | The 7 venues |
+| 12 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
 
 ### Option A — Supabase SQL Editor
 
@@ -102,6 +103,17 @@ live project, change that account's password.
   satisfied and every review insert is rejected. **pg_cron must be enabled**
   (Dashboard > Database > Extensions); the migration raises a warning rather
   than failing the whole file if it is not.
+- **Messaging needs `0010` or it is unusable.** `profiles` grants only
+  "read own", so without the `public_profiles` view every chat author renders
+  as "Member" and member search returns nothing — meaning no one can start a
+  direct message at all. The view exposes `display_name` and `avatar_url`
+  only, never `email` or `date_of_birth`. A broad policy plus column `GRANT`s
+  cannot substitute for it: column privileges attach to the role, not the
+  policy, so hiding a column from strangers also hides it from its owner.
+- **`blocked_user_ids()` exists because blocks are one-directional to read.**
+  `"blocks: manage own"` returns only the people you blocked, never those who
+  blocked you. That is deliberate, but it means the app cannot filter them out
+  of search without this `security definer` helper.
 - **Blocking ships with messaging**, in the same migration, not as a
   follow-up.
 - **`audit_log` is append-only** — no update or delete policy exists for
