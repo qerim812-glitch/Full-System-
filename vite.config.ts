@@ -12,4 +12,16 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+
+  // Deploy target is Vercel.
+  //
+  // The wrapper defaults nitro to the cloudflare-module preset, which is why
+  // builds previously emitted wrangler.json and .wrangler/. Nitro's own
+  // auto-detection would already pick Vercel when running inside Vercel CI,
+  // but pinning it means a local `bun run build` produces the same output we
+  // deploy, so the target is verifiable here rather than only in CI.
+  //
+  // Note: inside a Lovable build LOVABLE_NITRO_PRESET pins Cloudflare and
+  // overrides this, so Lovable previews stay on Cloudflare.
+  nitro: { preset: "vercel" },
 });

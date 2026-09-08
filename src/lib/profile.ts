@@ -63,16 +63,35 @@ export const updateProfile = createServerFn({ method: "POST" })
 export const exportMyData = createServerFn({ method: "POST" }).handler(
   async () => {
     const supabase = getSupabaseServerClient();
+    const user = await getCurrentUser();
+    if (!user) return null;
 
-    const [profile, bookings, reviews, favorites, reports, donations] =
-      await Promise.all([
-        supabase.from("profiles").select("*"),
-        supabase.from("bookings").select("*"),
-        supabase.from("reviews").select("*"),
-        supabase.from("favorites").select("*"),
-        supabase.from("reports").select("*"),
-        supabase.from("donations").select("*"),
-      ]);
+    const [
+      profile,
+      bookings,
+      reviews,
+      favorites,
+      reports,
+      donations,
+      chatMessages,
+      directMessages,
+      blocks,
+    ] = await Promise.all([
+      supabase.from("profiles").select("*"),
+      supabase.from("bookings").select("*"),
+      supabase.from("reviews").select("*"),
+      supabase.from("favorites").select("*"),
+      supabase.from("reports").select("*"),
+      supabase.from("donations").select("*"),
+      // Messages the caller wrote. "chat: read as member" would also return
+      // other people's messages, so this is narrowed to the caller's own —
+      // an export is the caller's data, not the rooms they were in.
+      supabase.from("chat_messages").select("*").eq("user_id", user.id),
+      // Both sides of a DM are the caller's own correspondence, and
+      // "dm: read own threads" already scopes this to their threads.
+      supabase.from("direct_messages").select("*"),
+      supabase.from("blocks").select("*"),
+    ]);
 
     return {
       exported_at: new Date().toISOString(),
@@ -82,6 +101,9 @@ export const exportMyData = createServerFn({ method: "POST" }).handler(
       favorites: favorites.data ?? [],
       reports: reports.data ?? [],
       donations: donations.data ?? [],
+      chat_messages: chatMessages.data ?? [],
+      direct_messages: directMessages.data ?? [],
+      blocks: blocks.data ?? [],
     };
   },
 );

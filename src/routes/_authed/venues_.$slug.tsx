@@ -1,11 +1,16 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { FavoriteButton } from "../../components/FavoriteButton";
+import { ReviewForm } from "../../components/ReviewForm";
+import { VenueChat } from "../../components/VenueChat";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { createBooking } from "../../lib/bookings";
+import { fetchMyFavorites } from "../../lib/favorites";
+import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
 import { fetchVenue } from "../../lib/venues";
 
 const TIME_SLOTS = [
@@ -17,8 +22,16 @@ const TIME_SLOTS = [
   "23:00",
 ] as const;
 
-export const Route = createFileRoute("/_authed/venues/$slug")({
-  loader: async ({ params }) => fetchVenue({ data: { slug: params.slug } }),
+export const Route = createFileRoute("/_authed/venues_/$slug")({
+  loader: async ({ params }) => {
+    const [detail, favorites, myReview, canReview] = await Promise.all([
+      fetchVenue({ data: { slug: params.slug } }),
+      fetchMyFavorites(),
+      fetchMyReview({ data: { venueSlug: params.slug } }),
+      canReviewVenue({ data: { venueSlug: params.slug } }),
+    ]);
+    return { detail, favorites, myReview, canReview };
+  },
   component: VenueDetailPage,
 });
 
@@ -27,7 +40,7 @@ function todayIso() {
 }
 
 function VenueDetailPage() {
-  const data = Route.useLoaderData();
+  const { detail, favorites, myReview, canReview } = Route.useLoaderData();
   const router = useRouter();
 
   const [date, setDate] = useState(todayIso());
@@ -38,7 +51,7 @@ function VenueDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (!data) {
+  if (!detail) {
     return (
       <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
         <h1 className="text-base font-semibold text-foreground">
@@ -54,7 +67,7 @@ function VenueDetailPage() {
     );
   }
 
-  const { venue, locations, reviews, averageRating } = data;
+  const { venue, locations, reviews, averageRating } = detail;
 
   async function handleBook(event: React.FormEvent) {
     event.preventDefault();
@@ -108,9 +121,16 @@ function VenueDetailPage() {
           ) : null}
 
           <div className="flex flex-col gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              {venue.name}
-            </h1>
+            <div className="flex items-start justify-between gap-3">
+              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+                {venue.name}
+              </h1>
+              <FavoriteButton
+                venueSlug={venue.slug}
+                initialFavorited={favorites.includes(venue.slug)}
+                className="mt-1 shrink-0"
+              />
+            </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {venue.description}
             </p>
@@ -160,6 +180,16 @@ function VenueDetailPage() {
             <h2 className="text-base font-semibold text-foreground">
               Reviews {reviews.length > 0 ? `(${reviews.length})` : ""}
             </h2>
+
+            {canReview || myReview ? (
+              <ReviewForm venueSlug={venue.slug} existing={myReview} />
+            ) : (
+              <p className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
+                You can leave a review once you have visited. Book a table and
+                your review opens up after the booking date passes.
+              </p>
+            )}
+
             {reviews.length === 0 ? (
               <p className="text-sm text-muted-foreground">
                 No reviews yet. You can leave one after you have visited.
@@ -184,6 +214,8 @@ function VenueDetailPage() {
               </ul>
             )}
           </section>
+
+          <VenueChat venueSlug={venue.slug} />
         </div>
 
         {/* Booking form */}

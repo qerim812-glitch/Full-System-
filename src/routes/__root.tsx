@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 
+import { Toaster } from "../components/ui/sonner";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -127,6 +128,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      {/* Mounted once here so toast() works anywhere. Without it every
+          toast call silently does nothing. */}
+      <Toaster />
     </QueryClientProvider>
   );
 }

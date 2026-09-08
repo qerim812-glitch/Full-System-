@@ -27,8 +27,9 @@ Thumbs.db
 .idea/
 .vscode/
 
-# Build output (nitro / wrangler)
+# Build output (nitro / vercel / wrangler)
 .output/
+.vercel/
 .wrangler/
 .nitro/
 .tanstack/

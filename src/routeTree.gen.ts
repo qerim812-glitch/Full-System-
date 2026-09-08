@@ -17,8 +17,12 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedBookingsRouteImport } from './routes/_authed/bookings'
+import { Route as AuthedDonateRouteImport } from './routes/_authed/donate'
+import { Route as AuthedFavouritesRouteImport } from './routes/_authed/favourites'
+import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
-import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues.$slug'
+import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
+import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues_.$slug'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,15 +63,35 @@ const AuthedBookingsRoute = AuthedBookingsRouteImport.update({
   path: '/bookings',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedDonateRoute = AuthedDonateRouteImport.update({
+  id: '/donate',
+  path: '/donate',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedFavouritesRoute = AuthedFavouritesRouteImport.update({
+  id: '/favourites',
+  path: '/favourites',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
+  id: '/messages',
+  path: '/messages',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
   id: '/venues',
   path: '/venues',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedMessagesUserIdRoute = AuthedMessagesUserIdRouteImport.update({
+  id: '/messages_/$userId',
+  path: '/messages/$userId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedVenuesSlugRoute = AuthedVenuesSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => AuthedVenuesRoute,
+  id: '/venues_/$slug',
+  path: '/venues/$slug',
+  getParentRoute: () => AuthedRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -78,7 +102,11 @@ export interface FileRoutesByFullPath {
   '/account': typeof AuthedAccountRoute
   '/admin': typeof AuthedAdminRoute
   '/bookings': typeof AuthedBookingsRoute
-  '/venues': typeof AuthedVenuesRouteWithChildren
+  '/donate': typeof AuthedDonateRoute
+  '/favourites': typeof AuthedFavouritesRoute
+  '/messages': typeof AuthedMessagesRoute
+  '/venues': typeof AuthedVenuesRoute
+  '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesByTo {
@@ -89,7 +117,11 @@ export interface FileRoutesByTo {
   '/account': typeof AuthedAccountRoute
   '/admin': typeof AuthedAdminRoute
   '/bookings': typeof AuthedBookingsRoute
-  '/venues': typeof AuthedVenuesRouteWithChildren
+  '/donate': typeof AuthedDonateRoute
+  '/favourites': typeof AuthedFavouritesRoute
+  '/messages': typeof AuthedMessagesRoute
+  '/venues': typeof AuthedVenuesRoute
+  '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesById {
@@ -102,8 +134,12 @@ export interface FileRoutesById {
   '/_authed/account': typeof AuthedAccountRoute
   '/_authed/admin': typeof AuthedAdminRoute
   '/_authed/bookings': typeof AuthedBookingsRoute
-  '/_authed/venues': typeof AuthedVenuesRouteWithChildren
-  '/_authed/venues/$slug': typeof AuthedVenuesSlugRoute
+  '/_authed/donate': typeof AuthedDonateRoute
+  '/_authed/favourites': typeof AuthedFavouritesRoute
+  '/_authed/messages': typeof AuthedMessagesRoute
+  '/_authed/venues': typeof AuthedVenuesRoute
+  '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
+  '/_authed/venues_/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -115,7 +151,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/bookings'
+    | '/donate'
+    | '/favourites'
+    | '/messages'
     | '/venues'
+    | '/messages/$userId'
     | '/venues/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -126,7 +166,11 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/bookings'
+    | '/donate'
+    | '/favourites'
+    | '/messages'
     | '/venues'
+    | '/messages/$userId'
     | '/venues/$slug'
   id:
     | '__root__'
@@ -138,8 +182,12 @@ export interface FileRouteTypes {
     | '/_authed/account'
     | '/_authed/admin'
     | '/_authed/bookings'
+    | '/_authed/donate'
+    | '/_authed/favourites'
+    | '/_authed/messages'
     | '/_authed/venues'
-    | '/_authed/venues/$slug'
+    | '/_authed/messages_/$userId'
+    | '/_authed/venues_/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -208,6 +256,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedBookingsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/donate': {
+      id: '/_authed/donate'
+      path: '/donate'
+      fullPath: '/donate'
+      preLoaderRoute: typeof AuthedDonateRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/favourites': {
+      id: '/_authed/favourites'
+      path: '/favourites'
+      fullPath: '/favourites'
+      preLoaderRoute: typeof AuthedFavouritesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/messages': {
+      id: '/_authed/messages'
+      path: '/messages'
+      fullPath: '/messages'
+      preLoaderRoute: typeof AuthedMessagesRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/venues': {
       id: '/_authed/venues'
       path: '/venues'
@@ -215,40 +284,45 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedVenuesRouteImport
       parentRoute: typeof AuthedRoute
     }
-    '/_authed/venues/$slug': {
-      id: '/_authed/venues/$slug'
-      path: '/$slug'
+    '/_authed/messages_/$userId': {
+      id: '/_authed/messages_/$userId'
+      path: '/messages/$userId'
+      fullPath: '/messages/$userId'
+      preLoaderRoute: typeof AuthedMessagesUserIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/venues_/$slug': {
+      id: '/_authed/venues_/$slug'
+      path: '/venues/$slug'
       fullPath: '/venues/$slug'
       preLoaderRoute: typeof AuthedVenuesSlugRouteImport
-      parentRoute: typeof AuthedVenuesRoute
+      parentRoute: typeof AuthedRoute
     }
   }
 }
-
-interface AuthedVenuesRouteChildren {
-  AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
-}
-
-const AuthedVenuesRouteChildren: AuthedVenuesRouteChildren = {
-  AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,
-}
-
-const AuthedVenuesRouteWithChildren = AuthedVenuesRoute._addFileChildren(
-  AuthedVenuesRouteChildren,
-)
 
 interface AuthedRouteChildren {
   AuthedAccountRoute: typeof AuthedAccountRoute
   AuthedAdminRoute: typeof AuthedAdminRoute
   AuthedBookingsRoute: typeof AuthedBookingsRoute
-  AuthedVenuesRoute: typeof AuthedVenuesRouteWithChildren
+  AuthedDonateRoute: typeof AuthedDonateRoute
+  AuthedFavouritesRoute: typeof AuthedFavouritesRoute
+  AuthedMessagesRoute: typeof AuthedMessagesRoute
+  AuthedVenuesRoute: typeof AuthedVenuesRoute
+  AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
+  AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
 }
 
 const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAccountRoute: AuthedAccountRoute,
   AuthedAdminRoute: AuthedAdminRoute,
   AuthedBookingsRoute: AuthedBookingsRoute,
-  AuthedVenuesRoute: AuthedVenuesRouteWithChildren,
+  AuthedDonateRoute: AuthedDonateRoute,
+  AuthedFavouritesRoute: AuthedFavouritesRoute,
+  AuthedMessagesRoute: AuthedMessagesRoute,
+  AuthedVenuesRoute: AuthedVenuesRoute,
+  AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
+  AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,
 }
 
 const AuthedRouteWithChildren =
