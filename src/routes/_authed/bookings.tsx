@@ -7,6 +7,7 @@ import {
   fetchMyBookings,
   type Booking,
 } from "../../lib/bookings";
+import { todayInTirana } from "../../lib/utils";
 import { EmptyState } from "./venues";
 
 export const Route = createFileRoute("/_authed/bookings")({
@@ -24,9 +25,7 @@ function BookingsPage() {
   const { bookings } = Route.useLoaderData();
 
   const upcoming = bookings.filter(
-    (b) =>
-      b.status === "confirmed" &&
-      b.booking_date >= new Date().toISOString().slice(0, 10),
+    (b) => b.status === "confirmed" && b.booking_date >= todayInTirana(),
   );
   const past = bookings.filter((b) => !upcoming.includes(b));
 

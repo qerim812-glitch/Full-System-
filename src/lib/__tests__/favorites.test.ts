@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { favoriteSchema } from "@/lib/favorites";
+import { favoriteSchema, setFavoriteSchema } from "@/lib/favorites";
 
 describe("favoriteSchema", () => {
   it("accepts a normal slug", () => {
@@ -21,5 +21,17 @@ describe("favoriteSchema", () => {
 
   it("rejects a missing slug", () => {
     expect(() => favoriteSchema.parse({})).toThrow();
+  });
+});
+
+describe("setFavoriteSchema", () => {
+  it("accepts an explicit favourited state", () => {
+    expect(
+      setFavoriteSchema.parse({ venueSlug: "radio-bar", favorited: true }),
+    ).toEqual({ venueSlug: "radio-bar", favorited: true });
+  });
+
+  it("rejects a missing favorited flag", () => {
+    expect(() => setFavoriteSchema.parse({ venueSlug: "radio-bar" })).toThrow();
   });
 });

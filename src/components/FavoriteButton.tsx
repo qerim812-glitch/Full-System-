@@ -3,7 +3,7 @@ import { Heart } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { toggleFavorite } from "../lib/favorites";
+import { setFavorite } from "../lib/favorites";
 import { cn } from "../lib/utils";
 
 /**
@@ -35,7 +35,9 @@ export function FavoriteButton({
     setPending(true);
 
     try {
-      const result = await toggleFavorite({ data: { venueSlug } });
+      const result = await setFavorite({
+        data: { venueSlug, favorited: next },
+      });
 
       if (!result.ok) {
         setFavorited(!next);

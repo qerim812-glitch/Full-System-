@@ -19,8 +19,9 @@ Run these **in order**. Each depends on the ones before it.
 | 8 | `migrations/0008_donations.sql` | `donations` |
 | 9 | `migrations/0009_booking_completion.sql` | `complete_past_bookings()` + its pg_cron schedule |
 | 10 | `migrations/0010_profile_visibility.sql` | `public_profiles` view + `blocked_user_ids()` |
-| 11 | `seed/0001_venues.sql` | The 7 venues |
-| 12 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
+| 11 | `migrations/0011_bookings_cancel_lockdown.sql` | Trigger restricting bookings UPDATEs to a confirmed→cancelled status change only |
+| 12 | `seed/0001_venues.sql` | The 7 venues |
+| 13 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
 
 ### Option A — Supabase SQL Editor
 
@@ -103,6 +104,14 @@ live project, change that account's password.
   satisfied and every review insert is rejected. **pg_cron must be enabled**
   (Dashboard > Database > Extensions); the migration raises a warning rather
   than failing the whole file if it is not.
+- **A booking's UPDATE is restricted to cancelling, not just to your own row.**
+  `"bookings: cancel own"` (0004) only proves `auth.uid() = user_id`; on its
+  own it would let a user set their own booking straight to `'completed'`
+  (forging a reviewable visit) or edit `party_size`/date/time after
+  `book_venue()`'s capacity check ran. `0011` adds a trigger enforcing that a
+  non-admin, non-system UPDATE may only flip `confirmed → cancelled` with
+  every other column unchanged; it also redefines `complete_past_bookings()`
+  to flag its own UPDATE as trusted via a transaction-local setting.
 - **Messaging needs `0010` or it is unusable.** `profiles` grants only
   "read own", so without the `public_profiles` view every chat author renders
   as "Member" and member search returns nothing — meaning no one can start a

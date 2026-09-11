@@ -9,6 +9,7 @@ import {
   fetchReportQueue,
   resolveReport,
   setDonationStatus,
+  setUserSuspended,
 } from "../../lib/admin";
 import { formatAmount } from "../../lib/donations";
 
@@ -39,17 +40,45 @@ function AdminPage() {
 
   async function act(id: string, status: "actioned" | "dismissed") {
     setBusyId(id);
-    await resolveReport({ data: { id, status } });
-    await router.invalidate();
-    setBusyId(null);
+    try {
+      const result = await resolveReport({ data: { id, status } });
+      if (!result.ok) toast.error(result.error);
+      await router.invalidate();
+    } catch {
+      toast.error("Could not reach the server. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function decide(id: string, status: "confirmed" | "failed") {
     setBusyId(id);
-    const result = await setDonationStatus({ data: { id, status } });
-    if (!result.ok) toast.error(result.error);
-    await router.invalidate();
-    setBusyId(null);
+    try {
+      const result = await setDonationStatus({ data: { id, status } });
+      if (!result.ok) toast.error(result.error);
+      await router.invalidate();
+    } catch {
+      toast.error("Could not reach the server. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function suspend(userId: string, suspended: boolean) {
+    setBusyId(userId);
+    try {
+      const result = await setUserSuspended({ data: { userId, suspended } });
+      if (!result.ok) {
+        toast.error(result.error);
+      } else {
+        toast.success(suspended ? "Member suspended" : "Member reinstated");
+      }
+      await router.invalidate();
+    } catch {
+      toast.error("Could not reach the server. Please try again.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -82,43 +111,65 @@ function AdminPage() {
           </p>
         ) : (
           <ul className="flex flex-col gap-3">
-            {reports.map((report) => (
-              <li
-                key={report.id}
-                className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-card p-4"
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                  <p className="text-sm font-semibold capitalize text-foreground">
-                    {report.reason.replace(/_/g, " ")}
-                  </p>
-                  {report.description ? (
-                    <p className="text-sm text-muted-foreground">
-                      {report.description}
+            {reports.map((report) => {
+              const reportedUserId = report.reported_user_id;
+              return (
+                <li
+                  key={report.id}
+                  className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-card p-4"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p className="text-sm font-semibold capitalize text-foreground">
+                      {report.reason.replace(/_/g, " ")}
                     </p>
-                  ) : null}
-                  <p className="text-xs tabular-nums text-muted-foreground">
-                    Filed {report.created_at.slice(0, 10)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busyId === report.id}
-                    onClick={() => act(report.id, "dismissed")}
-                  >
-                    Dismiss
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={busyId === report.id}
-                    onClick={() => act(report.id, "actioned")}
-                  >
-                    Take action
-                  </Button>
-                </div>
-              </li>
-            ))}
+                    <p className="text-xs text-muted-foreground">
+                      {report.reportedUserLabel
+                        ? `Member: ${report.reportedUserLabel}`
+                        : null}
+                      {report.reportedUserLabel && report.venueName
+                        ? " · "
+                        : ""}
+                      {report.venueName ? `Venue: ${report.venueName}` : null}
+                    </p>
+                    {report.description ? (
+                      <p className="text-sm text-muted-foreground">
+                        {report.description}
+                      </p>
+                    ) : null}
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      Filed {report.created_at.slice(0, 10)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {reportedUserId ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busyId === reportedUserId}
+                        onClick={() => void suspend(reportedUserId, true)}
+                      >
+                        Suspend member
+                      </Button>
+                    ) : null}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busyId === report.id}
+                      onClick={() => void act(report.id, "dismissed")}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={busyId === report.id}
+                      onClick={() => void act(report.id, "actioned")}
+                    >
+                      Take action
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

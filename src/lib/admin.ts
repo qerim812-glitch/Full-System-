@@ -69,8 +69,28 @@ export const fetchAdminOverview = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export type AdminReport = {
+  id: string;
+  reason: string;
+  description: string | null;
+  status: string;
+  created_at: string;
+  reported_user_id: string | null;
+  venue_slug: string | null;
+  reportedUserLabel: string | null;
+  venueName: string | null;
+};
+
+/**
+ * Enriches the raw queue with a human-readable label for who/what is being
+ * reported. Without this an admin sees only a reason and a raw uuid/slug —
+ * queries `profiles` directly (not `public_profiles`) because "profiles:
+ * admin reads all" grants the admin every column, including a suspended
+ * reported user's, which public_profiles deliberately hides from everyone
+ * else.
+ */
 export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
-  async () => {
+  async (): Promise<AdminReport[]> => {
     await requireAdmin();
     const supabase = getSupabaseServerClient();
 
@@ -87,7 +107,71 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
       console.error("[admin] report queue failed:", error.message);
       return [];
     }
-    return data ?? [];
+    const reports = data ?? [];
+
+    const userIds = [
+      ...new Set(
+        reports
+          .map((r) => r.reported_user_id)
+          .filter((id): id is string => id !== null),
+      ),
+    ];
+    const venueSlugs = [
+      ...new Set(
+        reports
+          .map((r) => r.venue_slug)
+          .filter((slug): slug is string => slug !== null),
+      ),
+    ];
+
+    const [profilesResult, venuesResult] = await Promise.all([
+      userIds.length > 0
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, email")
+            .in("id", userIds)
+        : Promise.resolve({ data: [], error: null }),
+      venueSlugs.length > 0
+        ? supabase.from("venues").select("slug, name").in("slug", venueSlugs)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    if (profilesResult.error) {
+      console.error(
+        "[admin] report queue profile lookup failed:",
+        profilesResult.error.message,
+      );
+    }
+    if (venuesResult.error) {
+      console.error(
+        "[admin] report queue venue lookup failed:",
+        venuesResult.error.message,
+      );
+    }
+
+    const profileMap = new Map(
+      (profilesResult.data ?? []).map((p) => [p["id"], p]),
+    );
+    const venueMap = new Map(
+      (venuesResult.data ?? []).map((v) => [v["slug"], v]),
+    );
+
+    return reports.map((r) => {
+      const profile = r.reported_user_id
+        ? profileMap.get(r.reported_user_id)
+        : undefined;
+      const venue = r.venue_slug ? venueMap.get(r.venue_slug) : undefined;
+
+      return {
+        ...r,
+        reportedUserLabel: r.reported_user_id
+          ? (profile?.["display_name"] ??
+            profile?.["email"] ??
+            "Unknown member")
+          : null,
+        venueName: r.venue_slug ? (venue?.["name"] ?? r.venue_slug) : null,
+      };
+    });
   },
 );
 
@@ -194,6 +278,45 @@ export const setDonationStatus = createServerFn({ method: "POST" })
       action: `donation.${data.status}`,
       target_type: "donation",
       target_id: data.id,
+      detail: {},
+    });
+
+    return { ok: true as const };
+  });
+
+const suspendSchema = z.object({
+  userId: z.string().uuid(),
+  suspended: z.boolean(),
+});
+
+/**
+ * Suspends or reinstates a member. "profiles: admin updates all" (0002) is
+ * the only thing that authorises this write; without an admin action that
+ * uses it, a report could be "actioned" with no actual consequence for the
+ * reported member. A suspended member disappears from public_profiles
+ * (0010) and is blocked from booking by book_venue() (0004).
+ */
+export const setUserSuspended = createServerFn({ method: "POST" })
+  .validator((data: unknown) => suspendSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({ is_suspended: data.suspended })
+      .eq("id", data.userId);
+
+    if (error) {
+      console.error("[admin] setUserSuspended failed:", error.message);
+      return { ok: false as const, error: "Could not update that member." };
+    }
+
+    await supabase.from("audit_log").insert({
+      actor_id: admin.id,
+      action: data.suspended ? "user.suspend" : "user.unsuspend",
+      target_type: "profile",
+      target_id: data.userId,
       detail: {},
     });
 

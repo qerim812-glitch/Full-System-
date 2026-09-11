@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { ReportDialog } from "../../components/ReportDialog";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import {
@@ -105,9 +106,12 @@ function ThreadPage() {
             {initial.otherName}
           </h1>
         </div>
-        <Button variant="outline" size="sm" onClick={handleBlock}>
-          Block
-        </Button>
+        <div className="flex shrink-0 items-center gap-1">
+          <ReportDialog reportedUserId={userId} />
+          <Button variant="outline" size="sm" onClick={handleBlock}>
+            Block
+          </Button>
+        </div>
       </div>
 
       <ul

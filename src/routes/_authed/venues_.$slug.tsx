@@ -2,6 +2,7 @@ import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { FavoriteButton } from "../../components/FavoriteButton";
+import { ReportDialog } from "../../components/ReportDialog";
 import { ReviewForm } from "../../components/ReviewForm";
 import { VenueChat } from "../../components/VenueChat";
 import { Alert, AlertDescription } from "../../components/ui/alert";
@@ -11,6 +12,7 @@ import { Label } from "../../components/ui/label";
 import { createBooking } from "../../lib/bookings";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
+import { todayInTirana } from "../../lib/utils";
 import { fetchVenue } from "../../lib/venues";
 
 const TIME_SLOTS = [
@@ -35,15 +37,11 @@ export const Route = createFileRoute("/_authed/venues_/$slug")({
   component: VenueDetailPage,
 });
 
-function todayIso() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function VenueDetailPage() {
   const { detail, favorites, myReview, canReview } = Route.useLoaderData();
   const router = useRouter();
 
-  const [date, setDate] = useState(todayIso());
+  const [date, setDate] = useState(todayInTirana());
   const [time, setTime] = useState<string>(TIME_SLOTS[1]);
   const [partySize, setPartySize] = useState(2);
   const [locationId, setLocationId] = useState<string>("");
@@ -125,11 +123,13 @@ function VenueDetailPage() {
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {venue.name}
               </h1>
-              <FavoriteButton
-                venueSlug={venue.slug}
-                initialFavorited={favorites.includes(venue.slug)}
-                className="mt-1 shrink-0"
-              />
+              <div className="mt-1 flex shrink-0 items-center gap-1">
+                <FavoriteButton
+                  venueSlug={venue.slug}
+                  initialFavorited={favorites.includes(venue.slug)}
+                />
+                <ReportDialog venueSlug={venue.slug} />
+              </div>
             </div>
             <p className="text-sm leading-relaxed text-muted-foreground">
               {venue.description}
@@ -271,7 +271,7 @@ function VenueDetailPage() {
               id="date"
               type="date"
               required
-              min={todayIso()}
+              min={todayInTirana()}
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />

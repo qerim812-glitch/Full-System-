@@ -26,46 +26,57 @@ export const fetchMyFavorites = createServerFn({ method: "GET" }).handler(
   },
 );
 
+export const setFavoriteSchema = favoriteSchema.extend({
+  favorited: z.boolean(),
+});
+
 /**
- * Toggle a venue in the caller's favourites.
+ * Set (not toggle) a venue's favourited state for the caller.
  *
- * Delete first, and only insert when the delete removed nothing. user_id is
- * set explicitly because the column has no default — the RLS `with check`
+ * Taking the target state from the client, rather than reading the current
+ * state and flipping it, makes the operation idempotent: two concurrent
+ * requests both wanting "unfavourited" both just DELETE (no-op if already
+ * gone), and two both wanting "favourited" both UPSERT with
+ * ignoreDuplicates. A delete-then-insert-if-nothing-deleted version raced
+ * itself here — two concurrent "remove" clicks could see the first DELETE
+ * remove the row and the second DELETE affect zero rows, which the second
+ * request would misread as "wasn't favourited" and re-insert, silently
+ * reverting a removal both callers intended. user_id is set explicitly on
+ * the insert path because the column has no default — the RLS `with check`
  * only verifies the value, it does not supply one.
  */
-export const toggleFavorite = createServerFn({ method: "POST" })
-  .validator((data: unknown) => favoriteSchema.parse(data))
+export const setFavorite = createServerFn({ method: "POST" })
+  .validator((data: unknown) => setFavoriteSchema.parse(data))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
     const user = await getCurrentUser();
     if (!user) return { ok: false as const, error: "Please sign in again." };
 
-    const { data: removed, error: deleteError } = await supabase
-      .from("favorites")
-      .delete()
-      .eq("venue_slug", data.venueSlug)
-      .select("venue_slug");
+    if (!data.favorited) {
+      const { error } = await supabase
+        .from("favorites")
+        .delete()
+        .eq("venue_slug", data.venueSlug);
 
-    if (deleteError) {
-      console.error("[favorites] delete failed:", deleteError.message);
-      return { ok: false as const, error: "Could not update your favourites." };
-    }
-
-    if ((removed ?? []).length > 0) {
+      if (error) {
+        console.error("[favorites] delete failed:", error.message);
+        return {
+          ok: false as const,
+          error: "Could not update your favourites.",
+        };
+      }
       return { ok: true as const, favorited: false };
     }
 
-    const { error: insertError } = await supabase
+    const { error } = await supabase
       .from("favorites")
-      .insert({ user_id: user.id, venue_slug: data.venueSlug });
+      .upsert(
+        { user_id: user.id, venue_slug: data.venueSlug },
+        { onConflict: "user_id,venue_slug", ignoreDuplicates: true },
+      );
 
-    if (insertError) {
-      // A concurrent request already favourited it. That is the end state the
-      // caller wanted, so report success rather than a spurious error.
-      if (/duplicate key|favorites_pkey/i.test(insertError.message)) {
-        return { ok: true as const, favorited: true };
-      }
-      console.error("[favorites] insert failed:", insertError.message);
+    if (error) {
+      console.error("[favorites] insert failed:", error.message);
       return { ok: false as const, error: "Could not update your favourites." };
     }
 
