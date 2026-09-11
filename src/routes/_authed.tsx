@@ -6,7 +6,6 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 
-import { Button } from "../components/ui/button";
 import { fetchAuthUser, signOut } from "../lib/auth";
 
 /**
@@ -37,7 +36,7 @@ export const Route = createFileRoute("/_authed")({
 const NAV = [
   { to: "/venues", label: "Venues" },
   { to: "/favourites", label: "Favourites" },
-  { to: "/bookings", label: "My bookings" },
+  { to: "/bookings", label: "My Bookings" },
   { to: "/messages", label: "Messages" },
   { to: "/donate", label: "Donate" },
   { to: "/account", label: "Account" },
@@ -54,24 +53,28 @@ function AuthedLayout() {
   }
 
   return (
+    /* Full-bleed cream canvas — no inner max-width on the shell */
     <div className="flex min-h-screen flex-col bg-background">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-6 px-4 py-3">
-          <Link to="/venues" className="flex flex-col leading-none">
-            <span className="text-base font-semibold tracking-tight text-foreground">
-              NewPop
-            </span>
-            <span className="text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-              Tirana
-            </span>
+
+      {/* ── Top bar ─────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-6 py-4">
+
+          {/* Brand pill — dark charcoal, matches the "×" close button in the ref */}
+          <Link
+            to="/venues"
+            className="flex h-10 shrink-0 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+          >
+            NewPop
           </Link>
 
-          <nav className="flex items-center gap-1">
+          {/* Pill nav tabs — the horizontal row in the reference UI */}
+          <nav className="flex flex-1 items-center gap-1.5 overflow-x-auto">
             {NAV.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
-                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&.active]:bg-accent [&.active]:text-foreground [&.active]:font-medium"
+                className="whitespace-nowrap rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground [&.active]:border-transparent [&.active]:bg-primary [&.active]:text-primary-foreground [&.active]:shadow-none"
               >
                 {item.label}
               </Link>
@@ -79,33 +82,32 @@ function AuthedLayout() {
             {user.isAdmin ? (
               <Link
                 to="/admin"
-                className="rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&.active]:bg-accent [&.active]:text-foreground [&.active]:font-medium"
+                className="whitespace-nowrap rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground [&.active]:border-transparent [&.active]:bg-primary [&.active]:text-primary-foreground [&.active]:shadow-none"
               >
                 Admin
               </Link>
             ) : null}
           </nav>
 
-          <div className="ml-auto flex items-center gap-3">
-            <span className="hidden text-xs text-muted-foreground sm:inline">
+          {/* User + sign-out — right side */}
+          <div className="ml-auto flex shrink-0 items-center gap-2">
+            <span className="hidden max-w-[10rem] truncate text-xs text-muted-foreground sm:inline">
               {user.email}
             </span>
-            <Button variant="outline" size="sm" onClick={handleSignOut}>
+            <button
+              onClick={handleSignOut}
+              className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
+            >
               Sign out
-            </Button>
+            </button>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8">
+      {/* ── Page content ────────────────────────────────────────────── */}
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
         <Outlet />
       </main>
-
-      <footer className="border-t border-border py-6">
-        <p className="mx-auto max-w-5xl px-4 text-xs text-muted-foreground">
-          NewPop · Book a table across Tirana
-        </p>
-      </footer>
     </div>
   );
 }

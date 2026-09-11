@@ -4,9 +4,12 @@ import { useState } from "react";
 import { FavoriteButton } from "../../components/FavoriteButton";
 import { ReportDialog } from "../../components/ReportDialog";
 import { ReviewForm } from "../../components/ReviewForm";
+import {
+  TimelineSection,
+  type TimelineEvent,
+} from "../../components/TimelineSection";
 import { VenueChat } from "../../components/VenueChat";
 import { Alert, AlertDescription } from "../../components/ui/alert";
-import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { createBooking } from "../../lib/bookings";
@@ -48,19 +51,25 @@ function VenueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "chat">(
+    "overview",
+  );
 
   if (!detail) {
     return (
-      <div className="rounded-lg border border-dashed border-border px-6 py-12 text-center">
+      <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
         <h1 className="text-base font-semibold text-foreground">
           Venue not found
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
           It may have been removed, or the link is wrong.
         </p>
-        <Button asChild variant="outline" className="mt-4">
-          <Link to="/venues">Back to venues</Link>
-        </Button>
+        <Link
+          to="/venues"
+          className="mt-4 inline-flex items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:border-foreground/20"
+        >
+          Back to venues
+        </Link>
       </div>
     );
   }
@@ -97,224 +106,395 @@ function VenueDetailPage() {
     }
   }
 
+  /* Build timeline events from reviews (most recent 6, grouped by month) */
+  const timelineEvents: TimelineEvent[] = buildTimeline(reviews);
+
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <Link
-          to="/venues"
-          className="text-sm text-muted-foreground underline-offset-4 hover:underline"
-        >
-          ← All venues
-        </Link>
-      </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1.3fr_1fr]">
-        <div className="flex flex-col gap-4">
+      {/* ── Back crumb ──────────────────────────────────────────────── */}
+      <Link
+        to="/venues"
+        className="flex w-fit items-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+        >
+          <path d="M19 12H5M12 19l-7-7 7-7" />
+        </svg>
+        All venues
+      </Link>
+
+      {/* ── Main two-column panel ────────────────────────────────────── */}
+      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+
+        {/* LEFT — venue identity card */}
+        <div className="flex flex-col gap-5">
+
+          {/* Hero image */}
           {venue.image_url ? (
             <img
               src={venue.image_url}
               alt=""
-              className="aspect-[16/9] w-full rounded-lg border border-border object-cover"
+              className="aspect-[16/9] w-full rounded-2xl object-cover shadow-sm"
             />
-          ) : null}
+          ) : (
+            <div className="aspect-[16/9] w-full rounded-2xl bg-muted shadow-sm" />
+          )}
 
-          <div className="flex flex-col gap-2">
-            <div className="flex items-start justify-between gap-3">
+          {/* Name + actions row */}
+          <div className="flex items-start justify-between gap-4">
+            <div>
               <h1 className="text-2xl font-semibold tracking-tight text-foreground">
                 {venue.name}
               </h1>
-              <div className="mt-1 flex shrink-0 items-center gap-1">
-                <FavoriteButton
-                  venueSlug={venue.slug}
-                  initialFavorited={favorites.includes(venue.slug)}
-                />
-                <ReportDialog venueSlug={venue.slug} />
-              </div>
+              {venue.location_url ? (
+                <a
+                  href={venue.location_url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <svg
+                    className="h-3.5 w-3.5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  Open in Maps
+                </a>
+              ) : null}
             </div>
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              {venue.description}
-            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              <FavoriteButton
+                venueSlug={venue.slug}
+                initialFavorited={favorites.includes(venue.slug)}
+              />
+              <ReportDialog venueSlug={venue.slug} />
+            </div>
           </div>
 
-          <dl className="grid grid-cols-3 gap-3 rounded-lg border border-border bg-card p-4">
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Age range
-              </dt>
-              <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                {venue.min_age}–{venue.max_age}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Capacity
-              </dt>
-              <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                {venue.capacity}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Rating
-              </dt>
-              <dd className="mt-1 text-sm font-medium tabular-nums text-foreground">
-                {averageRating
-                  ? `${averageRating.toFixed(1)} / 5`
-                  : "No reviews"}
-              </dd>
-            </div>
-          </dl>
+          {/* Stats strip — mirrors the vital-signs row */}
+          <div className="flex flex-wrap gap-3">
+            <StatChip label="Age range" value={`${venue.min_age}–${venue.max_age}`} />
+            <StatChip label="Capacity" value={String(venue.capacity)} />
+            <StatChip
+              label="Rating"
+              value={averageRating ? `${averageRating.toFixed(1)} / 5` : "—"}
+              accent={!!averageRating}
+            />
+            <StatChip label="Reviews" value={String(reviews.length)} />
+          </div>
 
-          {venue.location_url ? (
-            <a
-              href={venue.location_url}
-              target="_blank"
-              rel="noreferrer noopener"
-              className="text-sm text-foreground underline underline-offset-4"
-            >
-              Open in Google Maps
-            </a>
-          ) : null}
+          {/* Description */}
+          <p className="text-sm leading-relaxed text-muted-foreground">
+            {venue.description}
+          </p>
 
-          <section className="flex flex-col gap-3 pt-2">
-            <h2 className="text-base font-semibold text-foreground">
-              Reviews {reviews.length > 0 ? `(${reviews.length})` : ""}
-            </h2>
+          {/* ── Tab pills — Overview / Reviews / Chat ── */}
+          <div className="flex gap-2 border-b border-border pb-1">
+            {(["overview", "reviews", "chat"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-full px-4 py-1.5 text-sm font-medium capitalize transition-all ${
+                  activeTab === tab
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab === "reviews"
+                  ? `Reviews${reviews.length > 0 ? ` (${reviews.length})` : ""}`
+                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              </button>
+            ))}
+          </div>
 
-            {canReview || myReview ? (
-              <ReviewForm venueSlug={venue.slug} existing={myReview} />
-            ) : (
-              <p className="rounded-md border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                You can leave a review once you have visited. Book a table and
-                your review opens up after the booking date passes.
-              </p>
-            )}
-
-            {reviews.length === 0 ? (
+          {/* ── Tab panels ── */}
+          {activeTab === "overview" && (
+            <div className="flex flex-col gap-4">
               <p className="text-sm text-muted-foreground">
-                No reviews yet. You can leave one after you have visited.
+                {reviews.length === 0
+                  ? "No visits yet. Book a table below to be the first."
+                  : `${reviews.length} visit${reviews.length > 1 ? "s" : ""} recorded.`}
               </p>
-            ) : (
-              <ul className="flex flex-col gap-3">
-                {reviews.map((review) => (
-                  <li
-                    key={review.id}
-                    className="rounded-md border border-border bg-card p-3"
-                  >
-                    <p className="text-sm font-medium tabular-nums text-foreground">
-                      {review.rating} / 5
-                    </p>
-                    {review.comment ? (
-                      <p className="mt-1 text-sm text-muted-foreground">
-                        {review.comment}
-                      </p>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
 
-          <VenueChat venueSlug={venue.slug} />
+              {/* Horizontal booking timeline */}
+              {timelineEvents.length > 0 && (
+                <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+                  <h3 className="mb-4 text-sm font-semibold text-foreground">
+                    Visit history
+                  </h3>
+                  <TimelineSection events={timelineEvents} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === "reviews" && (
+            <div className="flex flex-col gap-4">
+              {canReview || myReview ? (
+                <ReviewForm venueSlug={venue.slug} existing={myReview} />
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border px-5 py-4 text-sm text-muted-foreground">
+                  You can leave a review after visiting. Book a table — your
+                  review unlocks once the booking date passes.
+                </div>
+              )}
+
+              {reviews.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No reviews yet. Be the first after your visit.
+                </p>
+              ) : (
+                <ul className="flex flex-col gap-3">
+                  {reviews.map((review) => (
+                    <li
+                      key={review.id}
+                      className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                    >
+                      <div className="flex items-center justify-between">
+                        <StarRating rating={review.rating} />
+                        <span className="text-xs text-muted-foreground">
+                          {review.rating} / 5
+                        </span>
+                      </div>
+                      {review.comment ? (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {review.comment}
+                        </p>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {activeTab === "chat" && (
+            <VenueChat venueSlug={venue.slug} />
+          )}
         </div>
 
-        {/* Booking form */}
-        <form
-          onSubmit={handleBook}
-          className="flex h-fit flex-col gap-4 rounded-lg border border-border bg-card p-5"
-        >
-          <h2 className="text-base font-semibold text-foreground">
-            Book a table
-          </h2>
+        {/* RIGHT — floating booking card */}
+        <div className="lg:sticky lg:top-24 h-fit">
+          <form
+            onSubmit={handleBook}
+            className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-sm"
+          >
+            <h2 className="text-base font-semibold text-foreground">
+              Book a table
+            </h2>
 
-          {error ? (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
-          {success ? (
-            <Alert>
-              <AlertDescription>
-                {success}{" "}
-                <Link
-                  to="/bookings"
-                  className="font-medium underline underline-offset-4"
+            {error ? (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            ) : null}
+            {success ? (
+              <Alert>
+                <AlertDescription>
+                  {success}{" "}
+                  <Link
+                    to="/bookings"
+                    className="font-medium underline underline-offset-4"
+                  >
+                    View bookings
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : null}
+
+            {locations.length > 0 ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="location" className="text-xs font-medium">
+                  Location
+                </Label>
+                <select
+                  id="location"
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                  className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 >
-                  View bookings
-                </Link>
-              </AlertDescription>
-            </Alert>
-          ) : null}
+                  <option value="">Any location</option>
+                  {locations.map((loc) => (
+                    <option key={loc.id} value={loc.id}>
+                      {loc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
-          {locations.length > 0 ? (
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="location">Location</Label>
-              <select
-                id="location"
-                value={locationId}
-                onChange={(e) => setLocationId(e.target.value)}
-                className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
-              >
-                <option value="">Any location</option>
-                {locations.map((loc) => (
-                  <option key={loc.id} value={loc.id}>
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="date" className="text-xs font-medium">
+                Date
+              </Label>
+              <Input
+                id="date"
+                type="date"
+                required
+                min={todayInTirana()}
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="rounded-xl"
+              />
             </div>
-          ) : null}
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="date">Date</Label>
-            <Input
-              id="date"
-              type="date"
-              required
-              min={todayInTirana()}
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="time" className="text-xs font-medium">
+                Time
+              </Label>
+              {/* Pill time selector */}
+              <div className="flex flex-wrap gap-2">
+                {TIME_SLOTS.map((slot) => (
+                  <button
+                    key={slot}
+                    type="button"
+                    onClick={() => setTime(slot)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                      time === slot
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                    }`}
+                  >
+                    {slot}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="time">Time</Label>
-            <select
-              id="time"
-              value={time}
-              onChange={(e) => setTime(e.target.value)}
-              className="h-9 rounded-md border border-input bg-background px-3 text-sm text-foreground"
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="party" className="text-xs font-medium">
+                People
+              </Label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPartySize((n) => Math.max(1, n - 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-foreground hover:border-foreground/20"
+                >
+                  −
+                </button>
+                <span className="w-6 text-center text-sm font-semibold tabular-nums text-foreground">
+                  {partySize}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPartySize((n) => Math.min(20, n + 1))}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-foreground hover:border-foreground/20"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={busy}
+              className="mt-1 w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
             >
-              {TIME_SLOTS.map((slot) => (
-                <option key={slot} value={slot}>
-                  {slot}
-                </option>
-              ))}
-            </select>
-          </div>
+              {busy ? "Booking…" : "Confirm booking"}
+            </button>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="party">People</Label>
-            <Input
-              id="party"
-              type="number"
-              min={1}
-              max={20}
-              required
-              value={partySize}
-              onChange={(e) => setPartySize(Number(e.target.value))}
-            />
-          </div>
-
-          <Button type="submit" disabled={busy} className="mt-1 w-full">
-            {busy ? "Booking…" : "Confirm booking"}
-          </Button>
-
-          <p className="text-xs text-muted-foreground">
-            Age limits and remaining seats are checked when you confirm.
-          </p>
-        </form>
+            <p className="text-center text-[11px] text-muted-foreground">
+              Age limits and remaining seats are checked when you confirm.
+            </p>
+          </form>
+        </div>
       </div>
     </div>
   );
+}
+
+/* ── Stat chip ───────────────────────────────────────────────────── */
+function StatChip({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`flex min-w-[6rem] flex-col gap-0.5 rounded-xl px-4 py-2.5 shadow-sm ${
+        accent
+          ? "bg-accent text-accent-foreground"
+          : "border border-border bg-card"
+      }`}
+    >
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        {label}
+      </span>
+      <span className="text-lg font-semibold leading-none text-foreground">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* ── Star rating display ─────────────────────────────────────────── */
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <div className="flex gap-0.5" aria-label={`${rating} out of 5 stars`}>
+      {Array.from({ length: 5 }).map((_, i) => (
+        <svg
+          key={i}
+          className={`h-4 w-4 ${
+            i < rating ? "text-accent-foreground" : "text-muted-foreground/40"
+          }`}
+          viewBox="0 0 24 24"
+          fill={i < rating ? "currentColor" : "none"}
+          stroke="currentColor"
+          strokeWidth={1.5}
+        >
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+/* ── Build timeline from reviews ─────────────────────────────────── */
+function buildTimeline(
+  reviews: Array<{ id: string; rating: number; comment?: string | null; created_at?: string }>,
+): TimelineEvent[] {
+  if (reviews.length === 0) return [];
+
+  // Group by month (last 6 reviews max)
+  const recent = reviews.slice(0, 6);
+  const byMonth = new Map<string, typeof recent>();
+
+  for (const r of recent) {
+    const dateStr = r.created_at ? new Date(r.created_at) : new Date();
+    const key = dateStr.toLocaleString("default", {
+      month: "short",
+      year: "2-digit",
+    });
+    if (!byMonth.has(key)) byMonth.set(key, []);
+    byMonth.get(key)!.push(r);
+  }
+
+  return Array.from(byMonth.entries()).map(([month, rs], i) => ({
+    id: `month-${i}`,
+    month,
+    subtitle: `${rs.length} visit${rs.length > 1 ? "s" : ""}`,
+    cards: rs.map((r) => ({
+      id: r.id,
+      title: `${r.rating}/5 — ${r.rating >= 4 ? "Great" : r.rating >= 3 ? "Good" : "OK"}`,
+      ...(r.comment ? { body: r.comment } : {}),
+      badge: `★ ${r.rating}`,
+      accent: r.rating >= 4,
+    })),
+  }));
 }
