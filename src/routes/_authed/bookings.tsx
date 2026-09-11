@@ -1,12 +1,7 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { Button } from "../../components/ui/button";
-import {
-  cancelBooking,
-  fetchMyBookings,
-  type Booking,
-} from "../../lib/bookings";
+import { cancelBooking, fetchMyBookings, type Booking } from "../../lib/bookings";
 import { todayInTirana } from "../../lib/utils";
 import { EmptyState } from "./venues";
 
@@ -28,19 +23,30 @@ function BookingsPage() {
     (b) => b.status === "confirmed" && b.booking_date >= todayInTirana(),
   );
   const past = bookings.filter((b) => !upcoming.includes(b));
+  const cancelled = bookings.filter((b) => b.status === "cancelled");
 
   return (
     <div className="flex flex-col gap-8">
+
+      {/* ── Header ──────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          My bookings
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          My Bookings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Your reservations are saved to your account, so they follow you across
-          devices.
+          Your reservations follow you across all devices.
         </p>
       </div>
 
+      {/* ── Stats strip ─────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-4">
+        <StatChip label="Total" value={String(bookings.length)} />
+        <StatChip label="Upcoming" value={String(upcoming.length)} accent />
+        <StatChip label="Completed" value={String(past.filter(b => b.status === "completed").length)} />
+        <StatChip label="Cancelled" value={String(cancelled.length)} />
+      </div>
+
+      {/* ── Content ─────────────────────────────────────────────── */}
       {bookings.length === 0 ? (
         <EmptyState
           title="No bookings yet"
@@ -49,15 +55,16 @@ function BookingsPage() {
       ) : (
         <>
           <Section title="Upcoming" bookings={upcoming} cancellable />
-          <Section title="Past and cancelled" bookings={past} />
+          <Section title="Past & cancelled" bookings={past} />
         </>
       )}
 
-      <div>
-        <Button asChild variant="outline">
-          <Link to="/venues">Browse venues</Link>
-        </Button>
-      </div>
+      <Link
+        to="/venues"
+        className="w-fit rounded-full border border-border bg-card px-5 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
+      >
+        Browse venues
+      </Link>
     </div>
   );
 }
@@ -80,11 +87,7 @@ function Section({
       </h2>
       <ul className="flex flex-col gap-3">
         {bookings.map((booking) => (
-          <BookingRow
-            key={booking.id}
-            booking={booking}
-            cancellable={cancellable}
-          />
+          <BookingRow key={booking.id} booking={booking} cancellable={cancellable} />
         ))}
       </ul>
     </section>
@@ -116,7 +119,8 @@ function BookingRow({
   }
 
   return (
-    <li className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-card p-4">
+    <li className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+      {/* Accent strip on left edge for upcoming */}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <p className="truncate text-sm font-semibold text-foreground">
           {booking.venues?.name ?? booking.venue_slug}
@@ -126,25 +130,27 @@ function BookingRow({
             {booking.booking_date} at {booking.booking_time.slice(0, 5)}
           </span>
           {" · "}
-          {booking.party_size} {booking.party_size === 1 ? "person" : "people"}
+          {booking.party_size}{" "}
+          {booking.party_size === 1 ? "person" : "people"}
           {booking.venue_locations?.name
             ? ` · ${booking.venue_locations.name}`
             : ""}
         </p>
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {error ? (
+          <p className="text-xs text-destructive">{error}</p>
+        ) : null}
       </div>
 
       <StatusPill status={booking.status} />
 
       {cancellable && booking.status === "confirmed" ? (
-        <Button
-          variant="outline"
-          size="sm"
+        <button
           onClick={handleCancel}
           disabled={busy}
+          className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
         >
           {busy ? "Cancelling…" : "Cancel"}
-        </Button>
+        </button>
       ) : null}
     </li>
   );
@@ -152,15 +158,36 @@ function BookingRow({
 
 function StatusPill({ status }: { status: Booking["status"] }) {
   const styles: Record<Booking["status"], string> = {
-    confirmed: "border-border text-foreground",
-    completed: "border-border text-muted-foreground",
-    cancelled: "border-destructive/40 text-destructive",
+    confirmed: "bg-accent text-accent-foreground",
+    completed: "bg-muted text-muted-foreground",
+    cancelled: "bg-destructive/10 text-destructive",
   };
   return (
     <span
-      className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium capitalize ${styles[status]}`}
+      className={`rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${styles[status]}`}
     >
       {status}
     </span>
+  );
+}
+
+function StatChip({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`flex min-w-[6rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
+        accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
+      }`}
+    >
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-xl font-semibold leading-none text-foreground">{value}</span>
+    </div>
   );
 }

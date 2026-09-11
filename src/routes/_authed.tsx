@@ -5,20 +5,10 @@ import {
   redirect,
   useRouter,
 } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 
 import { fetchAuthUser, signOut } from "../lib/auth";
 
-/**
- * Pathless layout guarding every signed-in route.
- *
- * The guard runs in beforeLoad on the SERVER, and fetchAuthUser verifies the
- * JWT with Supabase rather than trusting the cookie's contents. A child route
- * therefore cannot render at all without a valid session — the check is not a
- * component that could be skipped by rendering the child directly.
- *
- * The verified user is returned into route context, so children read it
- * without re-fetching.
- */
 export const Route = createFileRoute("/_authed")({
   beforeLoad: async ({ location }) => {
     const user = await fetchAuthUser();
@@ -42,9 +32,38 @@ const NAV = [
   { to: "/account", label: "Account" },
 ] as const;
 
+/** Reads / writes the "dark" class on <html> and persists to localStorage. */
+function useDarkMode() {
+  const [dark, setDark] = useState(() => {
+    if (typeof document === "undefined") return false;
+    return document.documentElement.classList.contains("dark");
+  });
+
+  useEffect(() => {
+    if (dark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
+    }
+  }, [dark]);
+
+  // On first mount, restore saved preference
+  useEffect(() => {
+    const saved = localStorage.getItem("theme");
+    if (saved === "dark") setDark(true);
+    else if (saved === "light") setDark(false);
+    else if (window.matchMedia("(prefers-color-scheme: dark)").matches) setDark(true);
+  }, []);
+
+  return [dark, setDark] as const;
+}
+
 function AuthedLayout() {
   const { user } = Route.useRouteContext();
   const router = useRouter();
+  const [dark, setDark] = useDarkMode();
 
   async function handleSignOut() {
     await signOut();
@@ -53,14 +72,13 @@ function AuthedLayout() {
   }
 
   return (
-    /* Full-bleed cream canvas — no inner max-width on the shell */
     <div className="flex min-h-screen flex-col bg-background">
 
       {/* ── Top bar ─────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm">
         <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-6 py-4">
 
-          {/* Brand pill — dark charcoal, matches the "×" close button in the ref */}
+          {/* Brand pill */}
           <Link
             to="/venues"
             className="flex h-10 shrink-0 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
@@ -68,7 +86,7 @@ function AuthedLayout() {
             NewPop
           </Link>
 
-          {/* Pill nav tabs — the horizontal row in the reference UI */}
+          {/* Pill nav tabs */}
           <nav className="flex flex-1 items-center gap-1.5 overflow-x-auto">
             {NAV.map((item) => (
               <Link
@@ -89,8 +107,28 @@ function AuthedLayout() {
             ) : null}
           </nav>
 
-          {/* User + sign-out — right side */}
+          {/* Right side: dark mode toggle + user + sign-out */}
           <div className="ml-auto flex shrink-0 items-center gap-2">
+            {/* Dark mode toggle */}
+            <button
+              onClick={() => setDark(!dark)}
+              aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+              className="flex h-8 w-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
+            >
+              {dark ? (
+                /* Sun icon */
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <circle cx="12" cy="12" r="5" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ) : (
+                /* Moon icon */
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+              )}
+            </button>
+
             <span className="hidden max-w-[10rem] truncate text-xs text-muted-foreground sm:inline">
               {user.email}
             </span>

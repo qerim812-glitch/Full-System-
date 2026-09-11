@@ -3,8 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { ReportDialog } from "../../components/ReportDialog";
-import { Button } from "../../components/ui/button";
-import { Input } from "../../components/ui/input";
 import {
   blockUser,
   fetchDmThread,
@@ -13,14 +11,11 @@ import {
 } from "../../lib/messaging";
 import { cn } from "../../lib/utils";
 
-/** Matches the venue chat cadence. */
 const POLL_MS = 5000;
 
 export const Route = createFileRoute("/_authed/messages_/$userId")({
   loader: async ({ params }) => {
     const thread = await fetchDmThread({ data: { userId: params.userId } });
-    // Opening a thread is what marks it read; doing it in the loader means it
-    // happens on navigation rather than needing an effect.
     await markThreadRead({ data: { userId: params.userId } });
     return thread;
   },
@@ -42,7 +37,7 @@ function ThreadPage() {
       const next = await fetchDmThread({ data: { userId } });
       setMessages(next.messages);
     } catch {
-      // A dropped poll is not worth an interruption; the next tick retries.
+      // Dropped poll — next tick retries silently.
     }
   }
 
@@ -67,13 +62,11 @@ function ThreadPage() {
     event.preventDefault();
     const trimmed = body.trim();
     if (!trimmed) return;
-
     setSending(true);
     const result = await sendDirectMessage({
       data: { recipientId: userId, body: trimmed },
     });
     setSending(false);
-
     if (!result.ok) {
       toast.error(result.error);
       return;
@@ -93,43 +86,61 @@ function ThreadPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
+
+      {/* ── Top bar ──────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-col">
+        <div className="flex items-center gap-4">
           <Link
             to="/messages"
-            className="text-sm text-muted-foreground underline-offset-4 hover:underline"
+            className="flex items-center gap-1.5 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
           >
-            ← Messages
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            Messages
           </Link>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
-            {initial.otherName}
-          </h1>
+
+          {/* Avatar + name */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+              {((initial.otherName ?? "M")[0] ?? "M").toUpperCase()}
+            </div>
+            <h1 className="text-lg font-semibold text-foreground">
+              {initial.otherName}
+            </h1>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-1">
+
+        {/* Actions */}
+        <div className="flex items-center gap-2">
           <ReportDialog reportedUserId={userId} />
-          <Button variant="outline" size="sm" onClick={handleBlock}>
+          <button
+            onClick={handleBlock}
+            className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-destructive/40 hover:text-destructive"
+          >
             Block
-          </Button>
+          </button>
         </div>
       </div>
 
+      {/* ── Message list ─────────────────────────────────────────── */}
       <ul
         ref={listRef}
-        className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto rounded-lg border border-border bg-card p-4"
+        className="flex max-h-[32rem] flex-col gap-2 overflow-y-auto rounded-2xl border border-border bg-card p-5"
         aria-live="polite"
         aria-label={`Conversation with ${initial.otherName}`}
       >
         {messages.length === 0 ? (
-          <li className="text-sm text-muted-foreground">
-            No messages yet. Send the first one.
+          <li className="py-8 text-center text-sm text-muted-foreground">
+            No messages yet. Send the first one below.
           </li>
         ) : (
           messages.map((message) => (
             <li
               key={message.id}
               className={cn(
-                "max-w-[85%] rounded-lg px-3 py-2 text-sm",
+                "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm",
                 message.is_mine
                   ? "self-end bg-primary text-primary-foreground"
                   : "self-start bg-muted text-foreground",
@@ -138,26 +149,35 @@ function ThreadPage() {
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
               <time
                 dateTime={message.created_at}
-                className="mt-0.5 block text-[10px] opacity-70"
+                className="mt-1 block text-[10px] opacity-60"
               >
-                {new Date(message.created_at).toLocaleString()}
+                {new Date(message.created_at).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
               </time>
             </li>
           ))
         )}
       </ul>
 
-      <form onSubmit={handleSend} className="flex gap-2">
-        <Input
+      {/* ── Compose bar ──────────────────────────────────────────── */}
+      <form onSubmit={handleSend} className="flex gap-3">
+        <input
           value={body}
           onChange={(e) => setBody(e.target.value)}
           placeholder="Write a message…"
           maxLength={2000}
           aria-label="Message"
+          className="flex-1 rounded-full border border-border bg-card px-5 py-2.5 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
-        <Button type="submit" disabled={sending || !body.trim()}>
-          {sending ? "Sending…" : "Send"}
-        </Button>
+        <button
+          type="submit"
+          disabled={sending || !body.trim()}
+          className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+        >
+          {sending ? "…" : "Send"}
+        </button>
       </form>
     </div>
   );

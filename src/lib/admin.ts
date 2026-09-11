@@ -322,3 +322,139 @@ export const setUserSuspended = createServerFn({ method: "POST" })
 
     return { ok: true as const };
   });
+
+/* ── Member list ────────────────────────────────────────────────────────── */
+
+export type AdminMember = {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+  date_of_birth: string;
+  is_suspended: boolean;
+  created_at: string;
+};
+
+export const fetchMembers = createServerFn({ method: "GET" })
+  .validator((data: unknown) => z.object({ page: z.number().int().min(0).default(0) }).parse(data))
+  .handler(async ({ data }): Promise<AdminMember[]> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const PAGE = 50;
+    const { data: rows, error } = await supabase
+      .from("profiles")
+      .select("id, display_name, email, date_of_birth, is_suspended, created_at")
+      .order("created_at", { ascending: false })
+      .range(data.page * PAGE, (data.page + 1) * PAGE - 1);
+
+    if (error) {
+      console.error("[admin] fetchMembers failed:", error.message);
+      return [];
+    }
+    return (rows ?? []) as AdminMember[];
+  });
+
+/* ── Venue management ───────────────────────────────────────────────────── */
+
+export type AdminVenue = {
+  slug: string;
+  name: string;
+  description: string;
+  image_url: string | null;
+  location_url: string | null;
+  min_age: number;
+  max_age: number;
+  capacity: number;
+  is_active: boolean;
+};
+
+export const fetchAdminVenues = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminVenue[]> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("venues")
+      .select("slug, name, description, image_url, location_url, min_age, max_age, capacity, is_active")
+      .order("name");
+    if (error) {
+      console.error("[admin] fetchAdminVenues failed:", error.message);
+      return [];
+    }
+    return (data ?? []) as AdminVenue[];
+  },
+);
+
+const venueUpsertSchema = z.object({
+  slug: z.string().min(1).max(120).regex(/^[a-z0-9-]+$/, "slug must be lowercase letters, numbers, hyphens"),
+  name: z.string().min(1).max(200),
+  description: z.string().min(1).max(2000),
+  image_url: z.string().url().nullable(),
+  location_url: z.string().url().nullable(),
+  min_age: z.number().int().min(18).max(99),
+  max_age: z.number().int().min(18).max(99),
+  capacity: z.number().int().min(1).max(10000),
+});
+
+export const upsertVenue = createServerFn({ method: "POST" })
+  .validator((data: unknown) => venueUpsertSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const { error } = await supabase.from("venues").upsert({
+      slug: data.slug,
+      name: data.name,
+      description: data.description,
+      image_url: data.image_url,
+      location_url: data.location_url,
+      min_age: data.min_age,
+      max_age: data.max_age,
+      capacity: data.capacity,
+    });
+
+    if (error) {
+      console.error("[admin] upsertVenue failed:", error.message);
+      return { ok: false as const, error: "Could not save venue." };
+    }
+
+    await supabase.from("audit_log").insert({
+      actor_id: admin.id,
+      action: "venue.upsert",
+      target_type: "venue",
+      target_id: data.slug,
+      detail: { name: data.name },
+    });
+
+    return { ok: true as const };
+  });
+
+const venueActivateSchema = z.object({
+  slug: z.string().min(1).max(120),
+  is_active: z.boolean(),
+});
+
+export const setVenueActive = createServerFn({ method: "POST" })
+  .validator((data: unknown) => venueActivateSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const { error } = await supabase
+      .from("venues")
+      .update({ is_active: data.is_active })
+      .eq("slug", data.slug);
+
+    if (error) {
+      console.error("[admin] setVenueActive failed:", error.message);
+      return { ok: false as const, error: "Could not update venue." };
+    }
+
+    await supabase.from("audit_log").insert({
+      actor_id: admin.id,
+      action: data.is_active ? "venue.activate" : "venue.deactivate",
+      target_type: "venue",
+      target_id: data.slug,
+      detail: {},
+    });
+
+    return { ok: true as const };
+  });

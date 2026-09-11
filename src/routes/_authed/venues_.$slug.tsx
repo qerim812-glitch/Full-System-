@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { FavoriteButton } from "../../components/FavoriteButton";
 import { ReportDialog } from "../../components/ReportDialog";
@@ -16,7 +16,7 @@ import { createBooking } from "../../lib/bookings";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
 import { todayInTirana } from "../../lib/utils";
-import { fetchVenue } from "../../lib/venues";
+import { fetchAvailability, fetchVenue } from "../../lib/venues";
 
 const TIME_SLOTS = [
   "18:00",
@@ -350,26 +350,14 @@ function VenueDetailPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="time" className="text-xs font-medium">
-                Time
-              </Label>
-              {/* Pill time selector */}
-              <div className="flex flex-wrap gap-2">
-                {TIME_SLOTS.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setTime(slot)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
-                      time === slot
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
-              </div>
+              <Label className="text-xs font-medium">Time</Label>
+              <SlotPicker
+                venueSlug={venue.slug}
+                date={date}
+                selected={time}
+                capacity={venue.capacity}
+                onSelect={setTime}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -439,6 +427,86 @@ function StatChip({
       <span className="text-lg font-semibold leading-none text-foreground">
         {value}
       </span>
+    </div>
+  );
+}
+
+/* ── Slot picker with live availability ─────────────────────────── */
+function SlotPicker({
+  venueSlug,
+  date,
+  selected,
+  capacity,
+  onSelect,
+}: {
+  venueSlug: string;
+  date: string;
+  selected: string;
+  capacity: number;
+  onSelect: (slot: string) => void;
+}) {
+  const [availability, setAvailability] = useState<
+    Array<{ booking_time: string; seats_taken: number; seats_left: number }>
+  >([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!date) return;
+    let cancelled = false;
+    setLoading(true);
+    fetchAvailability({ data: { slug: venueSlug, date } })
+      .then((rows) => { if (!cancelled) setAvailability(rows); })
+      .catch(() => { if (!cancelled) setAvailability([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [venueSlug, date]);
+
+  // Build a map: time → seats_left (missing time = fully available)
+  const slotsLeft = new Map(
+    availability.map((r) => [r.booking_time.slice(0, 5), r.seats_left]),
+  );
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {TIME_SLOTS.map((slot) => {
+        const left = slotsLeft.has(slot) ? (slotsLeft.get(slot) ?? 0) : capacity;
+        const full = left <= 0;
+        const low = !full && left <= Math.ceil(capacity * 0.2);
+
+        return (
+          <button
+            key={slot}
+            type="button"
+            disabled={full}
+            onClick={() => !full && onSelect(slot)}
+            className={`relative flex flex-col items-center rounded-2xl px-3 py-2 text-xs font-medium transition-all ${
+              full
+                ? "cursor-not-allowed border border-border bg-muted/50 text-muted-foreground/40 line-through"
+                : selected === slot
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+            }`}
+          >
+            <span>{slot}</span>
+            {!full && !loading && (
+              <span
+                className={`mt-0.5 text-[9px] font-semibold ${
+                  selected === slot
+                    ? "text-primary-foreground/70"
+                    : low
+                      ? "text-destructive"
+                      : "text-muted-foreground"
+                }`}
+              >
+                {left} left
+              </span>
+            )}
+            {loading && (
+              <span className="mt-0.5 text-[9px] text-muted-foreground/50">…</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

@@ -2,247 +2,604 @@ import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { Button } from "../../components/ui/button";
+import { Alert, AlertDescription } from "../../components/ui/alert";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
 import {
   fetchAdminOverview,
+  fetchAdminVenues,
+  fetchMembers,
   fetchPendingDonations,
   fetchReportQueue,
   resolveReport,
   setDonationStatus,
   setUserSuspended,
+  setVenueActive,
+  upsertVenue,
+  type AdminMember,
+  type AdminVenue,
 } from "../../lib/admin";
 import { formatAmount } from "../../lib/donations";
 
+type Tab = "reports" | "donations" | "venues" | "members";
+
 export const Route = createFileRoute("/_authed/admin")({
-  // Server-side gate. The old prototype showed the dashboard whenever the
-  // typed email merely contained the string "admin"; this checks the verified
-  // JWT claim, and RLS refuses the rows regardless.
   beforeLoad: ({ context }) => {
-    if (!context.user.isAdmin) {
-      throw redirect({ to: "/venues" });
-    }
+    if (!context.user.isAdmin) throw redirect({ to: "/venues" });
   },
   loader: async () => {
-    const [overview, reports, donations] = await Promise.all([
+    const [overview, reports, donations, venues, members] = await Promise.all([
       fetchAdminOverview(),
       fetchReportQueue(),
       fetchPendingDonations(),
+      fetchAdminVenues(),
+      fetchMembers({ data: { page: 0 } }),
     ]);
-    return { overview, reports, donations };
+    return { overview, reports, donations, venues, members };
   },
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { overview, reports, donations } = Route.useLoaderData();
+  const { overview, reports, donations, venues, members } = Route.useLoaderData();
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<Tab>("reports");
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  /* ── Report actions ─────────────────────────────────────────────── */
   async function act(id: string, status: "actioned" | "dismissed") {
     setBusyId(id);
     try {
       const result = await resolveReport({ data: { id, status } });
       if (!result.ok) toast.error(result.error);
       await router.invalidate();
-    } catch {
-      toast.error("Could not reach the server. Please try again.");
-    } finally {
-      setBusyId(null);
-    }
+    } catch { toast.error("Could not reach the server."); }
+    finally { setBusyId(null); }
   }
 
+  /* ── Donation actions ───────────────────────────────────────────── */
   async function decide(id: string, status: "confirmed" | "failed") {
     setBusyId(id);
     try {
       const result = await setDonationStatus({ data: { id, status } });
       if (!result.ok) toast.error(result.error);
       await router.invalidate();
-    } catch {
-      toast.error("Could not reach the server. Please try again.");
-    } finally {
-      setBusyId(null);
-    }
+    } catch { toast.error("Could not reach the server."); }
+    finally { setBusyId(null); }
   }
 
+  /* ── Member actions ─────────────────────────────────────────────── */
   async function suspend(userId: string, suspended: boolean) {
     setBusyId(userId);
     try {
       const result = await setUserSuspended({ data: { userId, suspended } });
-      if (!result.ok) {
-        toast.error(result.error);
-      } else {
-        toast.success(suspended ? "Member suspended" : "Member reinstated");
-      }
+      if (!result.ok) toast.error(result.error);
+      else toast.success(suspended ? "Member suspended" : "Member reinstated");
       await router.invalidate();
-    } catch {
-      toast.error("Could not reach the server. Please try again.");
-    } finally {
-      setBusyId(null);
-    }
+    } catch { toast.error("Could not reach the server."); }
+    finally { setBusyId(null); }
   }
+
+  const TABS: { id: Tab; label: string; badge?: number }[] = [
+    { id: "reports", label: "Reports", badge: reports.length },
+    { id: "donations", label: "Donations", badge: donations.length },
+    { id: "venues", label: "Venues" },
+    { id: "members", label: "Members" },
+  ];
 
   return (
     <div className="flex flex-col gap-8">
+
+      {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-          Admin
-        </h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Admin</h1>
         <p className="text-sm text-muted-foreground">
-          Live counts from the database. Every action here is written to the
-          audit log.
+          Live counts from the database. Every action is written to the audit log.
         </p>
       </div>
 
-      <dl className="grid grid-cols-2 gap-0 overflow-hidden rounded-lg border border-border bg-card sm:grid-cols-4">
-        <Stat label="Members" value={overview.members} />
-        <Stat label="Confirmed bookings" value={overview.confirmedBookings} />
-        <Stat label="Open reports" value={overview.openReports} />
-        <Stat label="Venues" value={overview.venues} />
-      </dl>
+      {/* ── Stats strip ────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-4">
+        <StatChip label="Members" value={String(overview.members)} />
+        <StatChip label="Confirmed bookings" value={String(overview.confirmedBookings)} accent />
+        <StatChip label="Open reports" value={String(overview.openReports)} />
+        <StatChip label="Venues" value={String(overview.venues)} />
+      </div>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-base font-semibold text-foreground">
-          Report queue
-        </h2>
+      {/* ── Tab pills ──────────────────────────────────────────── */}
+      <div className="flex flex-wrap gap-2 border-b border-border pb-1">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
+              activeTab === tab.id
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {tab.label}
+            {tab.badge != null && tab.badge > 0 && (
+              <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-accent-foreground">
+                {tab.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
 
-        {reports.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-6 py-10 text-center text-sm text-muted-foreground">
-            Nothing waiting. Reports filed by users appear here.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-3">
-            {reports.map((report) => {
-              const reportedUserId = report.reported_user_id;
-              return (
-                <li
-                  key={report.id}
-                  className="flex flex-wrap items-start gap-4 rounded-lg border border-border bg-card p-4"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <p className="text-sm font-semibold capitalize text-foreground">
-                      {report.reason.replace(/_/g, " ")}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {report.reportedUserLabel
-                        ? `Member: ${report.reportedUserLabel}`
-                        : null}
-                      {report.reportedUserLabel && report.venueName
-                        ? " · "
-                        : ""}
-                      {report.venueName ? `Venue: ${report.venueName}` : null}
-                    </p>
-                    {report.description ? (
-                      <p className="text-sm text-muted-foreground">
-                        {report.description}
+      {/* ── Reports tab ────────────────────────────────────────── */}
+      {activeTab === "reports" && (
+        <section className="flex flex-col gap-3">
+          {reports.length === 0 ? (
+            <EmptyCard text="No open reports. Filed reports appear here." />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {reports.map((report) => {
+                const reportedUserId = report.reported_user_id;
+                return (
+                  <li key={report.id} className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <p className="text-sm font-semibold capitalize text-foreground">
+                        {report.reason.replace(/_/g, " ")}
                       </p>
-                    ) : null}
-                    <p className="text-xs tabular-nums text-muted-foreground">
-                      Filed {report.created_at.slice(0, 10)}
+                      <p className="text-xs text-muted-foreground">
+                        {report.reportedUserLabel ? `Member: ${report.reportedUserLabel}` : null}
+                        {report.reportedUserLabel && report.venueName ? " · " : ""}
+                        {report.venueName ? `Venue: ${report.venueName}` : null}
+                      </p>
+                      {report.description && (
+                        <p className="text-sm text-muted-foreground">{report.description}</p>
+                      )}
+                      <p className="text-xs tabular-nums text-muted-foreground">
+                        Filed {report.created_at.slice(0, 10)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {reportedUserId && (
+                        <ActionButton
+                          label="Suspend member"
+                          busy={busyId === reportedUserId}
+                          onClick={() => void suspend(reportedUserId, true)}
+                          variant="danger"
+                        />
+                      )}
+                      <ActionButton
+                        label="Dismiss"
+                        busy={busyId === report.id}
+                        onClick={() => void act(report.id, "dismissed")}
+                      />
+                      <ActionButton
+                        label="Take action"
+                        busy={busyId === report.id}
+                        onClick={() => void act(report.id, "actioned")}
+                        variant="primary"
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {/* ── Donations tab ──────────────────────────────────────── */}
+      {activeTab === "donations" && (
+        <section className="flex flex-col gap-3">
+          {donations.length === 0 ? (
+            <EmptyCard text="Nothing awaiting confirmation." />
+          ) : (
+            <ul className="flex flex-col gap-3">
+              {donations.map((donation) => (
+                <li key={donation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold tabular-nums text-foreground">
+                      {formatAmount(donation.amount_minor, donation.currency)}
+                      <span className="ml-2 font-normal text-muted-foreground">
+                        {donation.method.replace("_", " ")}
+                      </span>
+                    </p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {donation.donor_email ?? "no email"} ·{" "}
+                      {new Date(donation.created_at).toLocaleDateString()}
+                      {donation.message ? ` · ${donation.message}` : ""}
                     </p>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {reportedUserId ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === reportedUserId}
-                        onClick={() => void suspend(reportedUserId, true)}
-                      >
-                        Suspend member
-                      </Button>
-                    ) : null}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={busyId === report.id}
-                      onClick={() => void act(report.id, "dismissed")}
-                    >
-                      Dismiss
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={busyId === report.id}
-                      onClick={() => void act(report.id, "actioned")}
-                    >
-                      Take action
-                    </Button>
+                  <div className="flex shrink-0 gap-2">
+                    <ActionButton
+                      label="Confirm"
+                      busy={busyId === donation.id}
+                      onClick={() => void decide(donation.id, "confirmed")}
+                      variant="primary"
+                    />
+                    <ActionButton
+                      label="Mark failed"
+                      busy={busyId === donation.id}
+                      onClick={() => void decide(donation.id, "failed")}
+                      variant="danger"
+                    />
                   </div>
                 </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
 
-      <section className="flex flex-col gap-3">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-base font-semibold text-foreground">
-            Pending donations
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            A donation stays pending until someone confirms the money arrived
-          </span>
-        </div>
+      {/* ── Venues tab ─────────────────────────────────────────── */}
+      {activeTab === "venues" && (
+        <VenuesPanel
+          venues={venues}
+          busyId={busyId}
+          setBusyId={setBusyId}
+          onRefresh={() => router.invalidate()}
+        />
+      )}
 
-        {donations.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border px-6 py-8 text-center text-sm text-muted-foreground">
-            Nothing awaiting confirmation.
-          </p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {donations.map((donation) => (
-              <li
-                key={donation.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium tabular-nums text-foreground">
-                    {formatAmount(donation.amount_minor, donation.currency)}
-                    <span className="ml-2 font-normal text-muted-foreground">
-                      {donation.method.replace("_", " ")}
-                    </span>
-                  </p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {donation.donor_email ?? "no email"} ·{" "}
-                    {new Date(donation.created_at).toLocaleDateString()}
-                    {donation.message ? ` · ${donation.message}` : ""}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button
-                    size="sm"
-                    disabled={busyId === donation.id}
-                    onClick={() => void decide(donation.id, "confirmed")}
-                  >
-                    Confirm
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busyId === donation.id}
-                    onClick={() => void decide(donation.id, "failed")}
-                  >
-                    Mark failed
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* ── Members tab ────────────────────────────────────────── */}
+      {activeTab === "members" && (
+        <MembersPanel
+          members={members}
+          busyId={busyId}
+          suspend={suspend}
+        />
+      )}
     </div>
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+/* ══════════════════════════════════════════════════════════════════════════
+   Venues panel — list + add/edit form
+   ══════════════════════════════════════════════════════════════════════════ */
+function VenuesPanel({
+  venues,
+  busyId,
+  setBusyId,
+  onRefresh,
+}: {
+  venues: AdminVenue[];
+  busyId: string | null;
+  setBusyId: (id: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const [editing, setEditing] = useState<AdminVenue | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  function openAdd() {
+    setEditing(null);
+    setShowForm(true);
+  }
+
+  function openEdit(venue: AdminVenue) {
+    setEditing(venue);
+    setShowForm(true);
+  }
+
+  async function toggleActive(slug: string, is_active: boolean) {
+    setBusyId(slug);
+    try {
+      const result = await setVenueActive({ data: { slug, is_active } });
+      if (!result.ok) toast.error(result.error);
+      else toast.success(is_active ? "Venue activated" : "Venue deactivated");
+      onRefresh();
+    } catch { toast.error("Could not reach the server."); }
+    finally { setBusyId(null); }
+  }
+
   return (
-    <div className="border-b border-r border-border p-4 last:border-r-0">
-      <dt className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </dt>
-      <dd className="mt-1 text-2xl font-semibold tabular-nums text-foreground">
-        {value}
-      </dd>
+    <div className="flex flex-col gap-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold text-foreground">
+          {venues.length} venue{venues.length !== 1 ? "s" : ""}
+        </h2>
+        <button
+          onClick={openAdd}
+          className="rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        >
+          + Add venue
+        </button>
+      </div>
+
+      {showForm && (
+        <VenueForm
+          initial={editing}
+          onClose={() => setShowForm(false)}
+          onSaved={() => { setShowForm(false); onRefresh(); }}
+        />
+      )}
+
+      {venues.length === 0 ? (
+        <EmptyCard text="No venues yet. Add one above." />
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {venues.map((venue) => (
+            <li key={venue.slug} className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-semibold text-foreground">{venue.name}</p>
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                    venue.is_active ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"
+                  }`}>
+                    {venue.is_active ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {venue.slug} · Ages {venue.min_age}–{venue.max_age} · {venue.capacity} seats
+                </p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">{venue.description}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <ActionButton label="Edit" busy={false} onClick={() => openEdit(venue)} />
+                <ActionButton
+                  label={venue.is_active ? "Deactivate" : "Activate"}
+                  busy={busyId === venue.slug}
+                  onClick={() => void toggleActive(venue.slug, !venue.is_active)}
+                  variant={venue.is_active ? "danger" : "primary"}
+                />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ── Venue add/edit form ─────────────────────────────────────────────────── */
+function VenueForm({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial: AdminVenue | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const isEdit = initial !== null;
+
+  const [slug, setSlug] = useState(initial?.slug ?? "");
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [imageUrl, setImageUrl] = useState(initial?.image_url ?? "");
+  const [locationUrl, setLocationUrl] = useState(initial?.location_url ?? "");
+  const [minAge, setMinAge] = useState(String(initial?.min_age ?? 18));
+  const [maxAge, setMaxAge] = useState(String(initial?.max_age ?? 35));
+  const [capacity, setCapacity] = useState(String(initial?.capacity ?? 50));
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await upsertVenue({
+        data: {
+          slug,
+          name,
+          description,
+          image_url: imageUrl || null,
+          location_url: locationUrl || null,
+          min_age: Number(minAge),
+          max_age: Number(maxAge),
+          capacity: Number(capacity),
+        },
+      });
+      if (!result.ok) { setError(result.error); return; }
+      toast.success(isEdit ? "Venue updated" : "Venue created");
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Validation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-base font-semibold text-foreground">
+          {isEdit ? `Edit ${initial.name}` : "Add new venue"}
+        </h3>
+        <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
+          Cancel
+        </button>
+      </div>
+
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
+        <Field label="Slug (URL key)" id="slug">
+          <Input id="slug" required value={slug} onChange={e => setSlug(e.target.value)}
+            disabled={isEdit} placeholder="mulliri" className="rounded-xl" />
+        </Field>
+        <Field label="Name" id="name">
+          <Input id="name" required value={name} onChange={e => setName(e.target.value)}
+            placeholder="Mulliri Vjeter" className="rounded-xl" />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Description" id="desc">
+            <Textarea id="desc" required value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="A short description of the venue" className="rounded-xl" />
+          </Field>
+        </div>
+        <Field label="Image URL (optional)" id="imageUrl">
+          <Input id="imageUrl" type="url" value={imageUrl}
+            onChange={e => setImageUrl(e.target.value)} placeholder="https://…" className="rounded-xl" />
+        </Field>
+        <Field label="Google Maps URL (optional)" id="locationUrl">
+          <Input id="locationUrl" type="url" value={locationUrl}
+            onChange={e => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/…" className="rounded-xl" />
+        </Field>
+        <Field label="Min age" id="minAge">
+          <Input id="minAge" type="number" required min={18} max={99} value={minAge}
+            onChange={e => setMinAge(e.target.value)} className="rounded-xl" />
+        </Field>
+        <Field label="Max age" id="maxAge">
+          <Input id="maxAge" type="number" required min={18} max={99} value={maxAge}
+            onChange={e => setMaxAge(e.target.value)} className="rounded-xl" />
+        </Field>
+        <Field label="Capacity (seats)" id="capacity">
+          <Input id="capacity" type="number" required min={1} max={10000} value={capacity}
+            onChange={e => setCapacity(e.target.value)} className="rounded-xl" />
+        </Field>
+
+        <div className="flex gap-3 sm:col-span-2">
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded-full bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? "Saving…" : isEdit ? "Save changes" : "Create venue"}
+          </button>
+          <button type="button" onClick={onClose}
+            className="rounded-full border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Members panel
+   ══════════════════════════════════════════════════════════════════════════ */
+function MembersPanel({
+  members,
+  busyId,
+  suspend,
+}: {
+  members: AdminMember[];
+  busyId: string | null;
+  suspend: (userId: string, suspended: boolean) => Promise<void>;
+}) {
+  const [search, setSearch] = useState("");
+
+  const visible = search.trim()
+    ? members.filter(
+        (m) =>
+          m.display_name?.toLowerCase().includes(search.toLowerCase()) ||
+          m.email?.toLowerCase().includes(search.toLowerCase()),
+      )
+    : members;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Filter by name or email…"
+            className="h-9 w-64 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <span className="text-xs text-muted-foreground">{visible.length} members</span>
+      </div>
+
+      {visible.length === 0 ? (
+        <EmptyCard text="No members found." />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {visible.map((member) => (
+            <li key={member.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+              <div className="flex min-w-0 flex-1 items-center gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
+                  {((member.display_name ?? member.email ?? "?")[0] ?? "?").toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-foreground">
+                    {member.display_name ?? "(no name)"}
+                    {member.is_suspended && (
+                      <span className="ml-2 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+                        Suspended
+                      </span>
+                    )}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {member.email} · Joined {member.created_at.slice(0, 10)}
+                  </p>
+                </div>
+              </div>
+              <ActionButton
+                label={member.is_suspended ? "Reinstate" : "Suspend"}
+                busy={busyId === member.id}
+                onClick={() => void suspend(member.id, !member.is_suspended)}
+                variant={member.is_suspended ? "primary" : "danger"}
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/* ── Shared helpers ────────────────────────────────────────────────────── */
+
+function StatChip({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`flex min-w-[7rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
+      accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
+    }`}>
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <span className="text-xl font-semibold leading-none text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  busy,
+  onClick,
+  variant = "default",
+}: {
+  label: string;
+  busy: boolean;
+  onClick: () => void;
+  variant?: "default" | "primary" | "danger";
+}) {
+  const styles = {
+    default: "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+    primary: "bg-primary text-primary-foreground hover:opacity-90",
+    danger: "border border-destructive/40 text-destructive hover:bg-destructive/10",
+  };
+  return (
+    <button
+      onClick={onClick}
+      disabled={busy}
+      className={`rounded-full px-4 py-1.5 text-xs font-medium shadow-sm transition-all disabled:opacity-40 ${styles[variant]}`}
+    >
+      {busy ? "…" : label}
+    </button>
+  );
+}
+
+function EmptyCard({ text }: { text: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border px-6 py-10 text-center">
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
+}
+
+function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={id} className="text-xs font-medium">{label}</Label>
+      {children}
     </div>
   );
 }
