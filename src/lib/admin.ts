@@ -458,3 +458,85 @@ export const setVenueActive = createServerFn({ method: "POST" })
 
     return { ok: true as const };
   });
+
+/* ── Admin bookings ─────────────────────────────────────────────────────── */
+
+export type AdminBooking = {
+  id: string;
+  venue_slug: string;
+  booking_date: string;
+  booking_time: string;
+  party_size: number;
+  status: "confirmed" | "cancelled" | "completed";
+  created_at: string;
+  user_email: string | null;
+  user_name: string | null;
+  venue_name: string | null;
+};
+
+export const fetchAdminBookings = createServerFn({ method: "GET" })
+  .validator((data: unknown) => z.object({ page: z.number().int().min(0).default(0) }).parse(data))
+  .handler(async ({ data }): Promise<AdminBooking[]> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const PAGE = 50;
+
+    const { data: rows, error } = await supabase
+      .from("bookings")
+      .select(
+        "id, venue_slug, booking_date, booking_time, party_size, status, created_at, venues(name), profiles(display_name, email)",
+      )
+      .order("booking_date", { ascending: false })
+      .order("booking_time", { ascending: false })
+      .range(data.page * PAGE, (data.page + 1) * PAGE - 1);
+
+    if (error) {
+      console.error("[admin] fetchAdminBookings failed:", error.message);
+      return [];
+    }
+
+    return (rows ?? []).map((r: Record<string, unknown>) => ({
+      id: r["id"] as string,
+      venue_slug: r["venue_slug"] as string,
+      booking_date: r["booking_date"] as string,
+      booking_time: r["booking_time"] as string,
+      party_size: r["party_size"] as number,
+      status: r["status"] as AdminBooking["status"],
+      created_at: r["created_at"] as string,
+      venue_name: (r["venues"] as { name: string } | null)?.name ?? null,
+      user_name: (r["profiles"] as { display_name: string | null } | null)?.display_name ?? null,
+      user_email: (r["profiles"] as { email: string | null } | null)?.email ?? null,
+    }));
+  });
+
+const bookingStatusSchema = z.object({
+  id: z.string().uuid(),
+  status: z.enum(["confirmed", "cancelled", "completed"]),
+});
+
+export const setBookingStatus = createServerFn({ method: "POST" })
+  .validator((data: unknown) => bookingStatusSchema.parse(data))
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const { error } = await supabase
+      .from("bookings")
+      .update({ status: data.status })
+      .eq("id", data.id);
+
+    if (error) {
+      console.error("[admin] setBookingStatus failed:", error.message);
+      return { ok: false as const, error: "Could not update booking." };
+    }
+
+    await supabase.from("audit_log").insert({
+      actor_id: admin.id,
+      action: `booking.${data.status}`,
+      target_type: "booking",
+      target_id: data.id,
+      detail: {},
+    });
+
+    return { ok: true as const };
+  });

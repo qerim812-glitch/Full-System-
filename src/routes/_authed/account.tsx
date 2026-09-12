@@ -1,5 +1,5 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "../../components/ui/alert";
@@ -7,6 +7,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { fetchMyBlocks, unblockUser } from "../../lib/messaging";
 import { exportMyData, fetchMyProfile, updateProfile } from "../../lib/profile";
+import { getSupabaseBrowserClient } from "../../lib/supabase/browser";
 
 export const Route = createFileRoute("/_authed/account")({
   loader: async () => {
@@ -36,6 +37,37 @@ function AccountPage() {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarBusy, setAvatarBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { toast.error("Image must be under 2 MB"); return; }
+
+    setAvatarBusy(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { toast.error("Not signed in"); return; }
+
+      const ext = file.name.split(".").pop() ?? "jpg";
+      const path = `avatars/${user.id}.${ext}`;
+
+      const { error } = await supabase.storage
+        .from("avatars")
+        .upload(path, file, { upsert: true, contentType: file.type });
+
+      if (error) { toast.error("Upload failed: " + error.message); return; }
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
+      setAvatarUrl(publicUrl + "?t=" + Date.now());
+      toast.success("Avatar updated!");
+    } finally {
+      setAvatarBusy(false);
+    }
+  }
 
   async function handleSave(event: React.FormEvent) {
     event.preventDefault();
@@ -107,6 +139,52 @@ function AccountPage() {
           {/* ── Profile form ─────────────────────────────────────── */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="mb-4 text-base font-semibold text-foreground">Profile</h2>
+
+            {/* Avatar */}
+            <div className="mb-5 flex items-center gap-4">
+              <div className="relative h-16 w-16 shrink-0">
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt="Your avatar"
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent text-2xl font-bold text-accent-foreground">
+                    {((profile.display_name ?? user.email ?? "?")[0] ?? "?").toUpperCase()}
+                  </div>
+                )}
+                {avatarBusy && (
+                  <div className="absolute inset-0 flex items-center justify-center rounded-full bg-background/60">
+                    <svg className="h-5 w-5 animate-spin text-muted-foreground" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">
+                  {profile.display_name ?? "(no name)"}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={avatarBusy}
+                  className="mt-1 rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+                >
+                  {avatarBusy ? "Uploading…" : "Change photo"}
+                </button>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={handleAvatarChange}
+                />
+                <p className="mt-1 text-[10px] text-muted-foreground">JPG, PNG or WebP · max 2 MB</p>
+              </div>
+            </div>
 
             {status ? (
               <Alert variant={status.kind === "err" ? "destructive" : "default"} className="mb-4">

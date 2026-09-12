@@ -25,24 +25,30 @@ export const Route = createFileRoute("/_authed/venues")({
 function VenuesPage() {
   const { venues, favorites } = Route.useLoaderData();
   const [query, setQuery] = useState("");
+  const [minCap, setMinCap] = useState(0);
+  const [maxAge, setMaxAge] = useState(99);
   const favoriteSet = new Set(favorites);
 
   const term = query.trim().toLowerCase();
-  const visible = term
-    ? venues.filter(
-        (v) =>
-          v.name.toLowerCase().includes(term) ||
-          v.description.toLowerCase().includes(term),
-      )
-    : venues;
+  const visible = venues.filter((v) => {
+    if (term && !v.name.toLowerCase().includes(term) && !v.description.toLowerCase().includes(term)) return false;
+    if (v.capacity < minCap) return false;
+    if (v.min_age > maxAge) return false;
+    return true;
+  });
 
   const totalCapacity = venues.reduce((sum, v) => sum + v.capacity, 0);
   const avgAge = venues.length
-    ? Math.round(
-        venues.reduce((sum, v) => sum + (v.min_age + v.max_age) / 2, 0) /
-          venues.length,
-      )
+    ? Math.round(venues.reduce((sum, v) => sum + (v.min_age + v.max_age) / 2, 0) / venues.length)
     : 0;
+
+  const capacitySteps = [0, 40, 60, 80];
+  const ageSteps = [
+    { label: "All ages", value: 99 },
+    { label: "18–25", value: 25 },
+    { label: "18–35", value: 35 },
+    { label: "21+", value: 99 },
+  ];
 
   return (
     <div className="flex flex-col gap-8">
@@ -57,7 +63,7 @@ function VenuesPage() {
         </p>
       </div>
 
-      {/* ── Stats strip — mirrors the vital-sign row in the reference ── */}
+      {/* ── Stats strip ─────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-4">
         <StatChip label="Total venues" value={String(venues.length)} />
         <StatChip label="Total capacity" value={`${totalCapacity} seats`} />
@@ -65,19 +71,13 @@ function VenuesPage() {
         <StatChip label="Favourites" value={String(favorites.length)} accent />
       </div>
 
-      {/* ── Filter chips + pill search ────────────────────────────── */}
+      {/* ── Search + filters ─────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* Pill-shaped search input */}
+        {/* Pill search */}
         <div className="relative">
-          <svg
-            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <circle cx="11" cy="11" r="8" />
-            <path d="m21 21-4.35-4.35" />
+          <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
           </svg>
           <input
             type="search"
@@ -85,27 +85,39 @@ function VenuesPage() {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search venues…"
             aria-label="Search venues"
-            className="h-9 w-56 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            className="h-9 w-52 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
 
-        {/* Quick filter chips */}
-        {[
-          { label: "All", active: !query },
-          { label: "Favourites", active: false },
-        ].map((chip) => (
-          <button
-            key={chip.label}
-            onClick={() => chip.label === "All" && setQuery("")}
-            className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-all ${
-              chip.active
-                ? "border-transparent bg-primary text-primary-foreground shadow-none"
-                : "border-border bg-card text-muted-foreground shadow-sm hover:border-foreground/20 hover:text-foreground"
-            }`}
-          >
-            {chip.label}
-          </button>
-        ))}
+        {/* Capacity filter chips */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Min seats:</span>
+          {capacitySteps.map((cap) => (
+            <button key={cap} onClick={() => setMinCap(cap)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                minCap === cap
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-muted-foreground hover:text-foreground"
+              }`}>
+              {cap === 0 ? "Any" : `${cap}+`}
+            </button>
+          ))}
+        </div>
+
+        {/* Age filter chips */}
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground">Age:</span>
+          {ageSteps.map((a) => (
+            <button key={a.label} onClick={() => setMaxAge(a.value)}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                maxAge === a.value && (a.label !== "All ages" || maxAge === 99)
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-border bg-card text-muted-foreground hover:text-foreground"
+              }`}>
+              {a.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Venue card grid ──────────────────────────────────────── */}
@@ -117,8 +129,8 @@ function VenuesPage() {
           />
         ) : (
           <EmptyState
-            title={`Nothing matches "${query}"`}
-            body="Try a different name, or clear the search to see everywhere."
+            title="No venues match your filters"
+            body="Try clearing the search or adjusting the age and capacity filters."
           />
         )
       ) : (
@@ -211,14 +223,24 @@ function VenueCard({ venue, favorited }: { venue: Venue; favorited: boolean }) {
   );
 }
 
-/* ── Empty state ──────────────────────────────────────────────────── */
-export function EmptyState({ title, body }: { title: string; body: string }) {
+/* ── Empty state with illustration ───────────────────────────────── */
+export function EmptyState({ title, body, action }: { title: string; body: string; action?: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
+    <div className="flex flex-col items-center rounded-2xl bg-card px-6 py-14 text-center shadow-sm">
+      {/* Simple abstract SVG illustration */}
+      <svg
+        className="mb-5 h-20 w-20 text-muted-foreground/30"
+        viewBox="0 0 80 80"
+        fill="none"
+        aria-hidden
+      >
+        <circle cx="40" cy="40" r="36" stroke="currentColor" strokeWidth="3" strokeDasharray="6 4" />
+        <circle cx="40" cy="30" r="10" stroke="currentColor" strokeWidth="2.5" />
+        <path d="M20 62c0-11.046 8.954-20 20-20s20 8.954 20 20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
       <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-        {body}
-      </p>
+      <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{body}</p>
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }

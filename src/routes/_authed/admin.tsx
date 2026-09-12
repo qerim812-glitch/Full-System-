@@ -7,42 +7,46 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
 import {
+  fetchAdminBookings,
   fetchAdminOverview,
   fetchAdminVenues,
   fetchMembers,
   fetchPendingDonations,
   fetchReportQueue,
   resolveReport,
+  setBookingStatus,
   setDonationStatus,
   setUserSuspended,
   setVenueActive,
   upsertVenue,
+  type AdminBooking,
   type AdminMember,
   type AdminVenue,
 } from "../../lib/admin";
 import { formatAmount } from "../../lib/donations";
 
-type Tab = "reports" | "donations" | "venues" | "members";
+type Tab = "reports" | "donations" | "venues" | "members" | "bookings";
 
 export const Route = createFileRoute("/_authed/admin")({
   beforeLoad: ({ context }) => {
     if (!context.user.isAdmin) throw redirect({ to: "/venues" });
   },
   loader: async () => {
-    const [overview, reports, donations, venues, members] = await Promise.all([
+    const [overview, reports, donations, venues, members, bookings] = await Promise.all([
       fetchAdminOverview(),
       fetchReportQueue(),
       fetchPendingDonations(),
       fetchAdminVenues(),
       fetchMembers({ data: { page: 0 } }),
+      fetchAdminBookings({ data: { page: 0 } }),
     ]);
-    return { overview, reports, donations, venues, members };
+    return { overview, reports, donations, venues, members, bookings };
   },
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { overview, reports, donations, venues, members } = Route.useLoaderData();
+  const { overview, reports, donations, venues, members, bookings } = Route.useLoaderData();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("reports");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -84,6 +88,7 @@ function AdminPage() {
   const TABS: { id: Tab; label: string; badge?: number }[] = [
     { id: "reports", label: "Reports", badge: reports.length },
     { id: "donations", label: "Donations", badge: donations.length },
+    { id: "bookings", label: "Bookings" },
     { id: "venues", label: "Venues" },
     { id: "members", label: "Members" },
   ];
@@ -228,6 +233,26 @@ function AdminPage() {
         </section>
       )}
 
+      {/* ── Bookings tab ───────────────────────────────────────── */}
+      {activeTab === "bookings" && (
+        <BookingsPanel
+          bookings={bookings}
+          busyId={busyId}
+          setBusyId={setBusyId}
+          onRefresh={() => router.invalidate()}
+        />
+      )}
+
+      {/* ── Bookings tab ───────────────────────────────────────── */}
+      {activeTab === "bookings" && (
+        <BookingsPanel
+          bookings={bookings}
+          busyId={busyId}
+          setBusyId={setBusyId}
+          onRefresh={() => router.invalidate()}
+        />
+      )}
+
       {/* ── Venues tab ─────────────────────────────────────────── */}
       {activeTab === "venues" && (
         <VenuesPanel
@@ -245,6 +270,118 @@ function AdminPage() {
           busyId={busyId}
           suspend={suspend}
         />
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Bookings panel — full list with status management
+   ══════════════════════════════════════════════════════════════════════════ */
+function BookingsPanel({
+  bookings,
+  busyId,
+  setBusyId,
+  onRefresh,
+}: {
+  bookings: AdminBooking[];
+  busyId: string | null;
+  setBusyId: (id: string | null) => void;
+  onRefresh: () => void;
+}) {
+  const [search, setSearch] = useState("");
+
+  const visible = search.trim()
+    ? bookings.filter(
+        (b) =>
+          b.venue_name?.toLowerCase().includes(search.toLowerCase()) ||
+          b.user_name?.toLowerCase().includes(search.toLowerCase()) ||
+          b.user_email?.toLowerCase().includes(search.toLowerCase()),
+      )
+    : bookings;
+
+  async function changeStatus(id: string, status: AdminBooking["status"]) {
+    setBusyId(id);
+    try {
+      const result = await setBookingStatus({ data: { id, status } });
+      if (!result.ok) toast.error(result.error);
+      else toast.success(`Booking marked ${status}`);
+      onRefresh();
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const STATUS_STYLES: Record<AdminBooking["status"], string> = {
+    confirmed: "bg-accent text-accent-foreground",
+    completed: "bg-muted text-muted-foreground",
+    cancelled: "bg-destructive/10 text-destructive",
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-3">
+        <div className="relative">
+          <svg
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+          >
+            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          </svg>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by venue, name or email…"
+            className="h-9 w-72 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+        <span className="text-xs text-muted-foreground">{visible.length} bookings</span>
+      </div>
+
+      {visible.length === 0 ? (
+        <EmptyCard text="No bookings found." />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {visible.map((b) => (
+            <li key={b.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <p className="text-sm font-semibold text-foreground">
+                  {b.venue_name ?? b.venue_slug}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {b.booking_date} at {b.booking_time.slice(0, 5)} · {b.party_size}{" "}
+                  {b.party_size === 1 ? "person" : "people"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {b.user_name ?? "(no name)"} · {b.user_email ?? "no email"}
+                </p>
+              </div>
+              <span className={`rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[b.status]}`}>
+                {b.status}
+              </span>
+              <div className="flex gap-2">
+                {b.status !== "completed" && (
+                  <ActionButton
+                    label="Complete"
+                    busy={busyId === b.id}
+                    onClick={() => void changeStatus(b.id, "completed")}
+                    variant="primary"
+                  />
+                )}
+                {b.status === "confirmed" && (
+                  <ActionButton
+                    label="Cancel"
+                    busy={busyId === b.id}
+                    onClick={() => void changeStatus(b.id, "cancelled")}
+                    variant="danger"
+                  />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );
