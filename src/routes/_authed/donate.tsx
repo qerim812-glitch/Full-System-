@@ -29,8 +29,36 @@ const STATUS_STYLES: Record<string, string> = {
 
 export const Route = createFileRoute("/_authed/donate")({
   loader: async () => ({ donations: await fetchMyDonations() }),
+  pendingComponent: DonateSkeleton,
+  errorComponent: () => (
+    <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
+      <h2 className="text-base font-semibold text-foreground">
+        Could not load donations
+      </h2>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Refresh the page to try again.
+      </p>
+    </div>
+  ),
   component: DonatePage,
 });
+
+function DonateSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="h-8 w-44 animate-pulse rounded-lg bg-muted" />
+      <div className="flex gap-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-16 w-28 animate-pulse rounded-2xl bg-muted" />
+        ))}
+      </div>
+      <div className="grid gap-8 lg:grid-cols-2">
+        <div className="h-80 animate-pulse rounded-2xl bg-muted" />
+        <div className="h-60 animate-pulse rounded-2xl bg-muted" />
+      </div>
+    </div>
+  );
+}
 
 function DonatePage() {
   const { donations } = Route.useLoaderData();

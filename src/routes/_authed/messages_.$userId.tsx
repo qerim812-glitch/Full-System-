@@ -151,10 +151,25 @@ function ThreadPage() {
                 dateTime={message.created_at}
                 className="mt-1 block text-[10px] opacity-60"
               >
-                {new Date(message.created_at).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
+                {(() => {
+                  const d = new Date(message.created_at);
+                  const now = new Date();
+                  const isToday =
+                    d.getFullYear() === now.getFullYear() &&
+                    d.getMonth() === now.getMonth() &&
+                    d.getDate() === now.getDate();
+                  return isToday
+                    ? d.toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : d.toLocaleDateString([], {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                })()}
               </time>
             </li>
           ))

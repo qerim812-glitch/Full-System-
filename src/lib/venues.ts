@@ -69,10 +69,12 @@ export const fetchVenue = createServerFn({ method: "GET" })
           .eq("venue_slug", data.slug)
           .eq("is_active", true)
           .order("name"),
-        // The 20 most recent, for display.
+        // The 20 most recent, for display. Join public_profiles for author name.
         supabase
           .from("reviews")
-          .select("id, rating, comment, created_at")
+          .select(
+            "id, rating, comment, created_at, user_id, public_profiles(display_name)",
+          )
           .eq("venue_slug", data.slug)
           .eq("is_hidden", false)
           .order("created_at", { ascending: false })

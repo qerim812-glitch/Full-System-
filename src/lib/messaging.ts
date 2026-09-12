@@ -325,6 +325,27 @@ export const markThreadRead = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+/** Mark every unread DM in every thread as read in one sweep. */
+export const markAllRead = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const supabase = getSupabaseServerClient();
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const };
+
+    const { error } = await supabase
+      .from("direct_messages")
+      .update({ read_at: new Date().toISOString() })
+      .eq("recipient_id", user.id)
+      .is("read_at", null);
+
+    if (error) {
+      console.error("[dm] markAllRead failed:", error.message);
+      return { ok: false as const };
+    }
+    return { ok: true as const };
+  },
+);
+
 // ---------------------------------------------------------------------------
 // Blocking
 // ---------------------------------------------------------------------------

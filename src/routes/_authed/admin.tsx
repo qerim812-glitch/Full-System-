@@ -10,6 +10,7 @@ import {
   fetchAdminBookings,
   fetchAdminOverview,
   fetchAdminVenues,
+  fetchAuditLog,
   fetchMembers,
   fetchPendingDonations,
   fetchReportQueue,
@@ -22,31 +23,34 @@ import {
   type AdminBooking,
   type AdminMember,
   type AdminVenue,
+  type AuditEntry,
 } from "../../lib/admin";
 import { formatAmount } from "../../lib/donations";
 
-type Tab = "reports" | "donations" | "venues" | "members" | "bookings";
+type Tab = "reports" | "donations" | "bookings" | "venues" | "members" | "audit";
 
 export const Route = createFileRoute("/_authed/admin")({
   beforeLoad: ({ context }) => {
     if (!context.user.isAdmin) throw redirect({ to: "/venues" });
   },
   loader: async () => {
-    const [overview, reports, donations, venues, members, bookings] = await Promise.all([
-      fetchAdminOverview(),
-      fetchReportQueue(),
-      fetchPendingDonations(),
-      fetchAdminVenues(),
-      fetchMembers({ data: { page: 0 } }),
-      fetchAdminBookings({ data: { page: 0 } }),
-    ]);
+    const [overview, reports, donations, venues, members, bookings] =
+      await Promise.all([
+        fetchAdminOverview(),
+        fetchReportQueue(),
+        fetchPendingDonations(),
+        fetchAdminVenues(),
+        fetchMembers({ data: { page: 0 } }),
+        fetchAdminBookings({ data: { page: 0 } }),
+      ]);
     return { overview, reports, donations, venues, members, bookings };
   },
   component: AdminPage,
 });
 
 function AdminPage() {
-  const { overview, reports, donations, venues, members, bookings } = Route.useLoaderData();
+  const { overview, reports, donations, venues, members, bookings } =
+    Route.useLoaderData();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("reports");
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -58,8 +62,11 @@ function AdminPage() {
       const result = await resolveReport({ data: { id, status } });
       if (!result.ok) toast.error(result.error);
       await router.invalidate();
-    } catch { toast.error("Could not reach the server."); }
-    finally { setBusyId(null); }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   /* ── Donation actions ───────────────────────────────────────────── */
@@ -69,8 +76,11 @@ function AdminPage() {
       const result = await setDonationStatus({ data: { id, status } });
       if (!result.ok) toast.error(result.error);
       await router.invalidate();
-    } catch { toast.error("Could not reach the server."); }
-    finally { setBusyId(null); }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   /* ── Member actions ─────────────────────────────────────────────── */
@@ -81,8 +91,11 @@ function AdminPage() {
       if (!result.ok) toast.error(result.error);
       else toast.success(suspended ? "Member suspended" : "Member reinstated");
       await router.invalidate();
-    } catch { toast.error("Could not reach the server."); }
-    finally { setBusyId(null); }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   const TABS: { id: Tab; label: string; badge?: number }[] = [
@@ -91,23 +104,30 @@ function AdminPage() {
     { id: "bookings", label: "Bookings" },
     { id: "venues", label: "Venues" },
     { id: "members", label: "Members" },
+    { id: "audit", label: "Audit log" },
   ];
 
   return (
     <div className="flex flex-col gap-8">
-
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Admin</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+          Admin
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Live counts from the database. Every action is written to the audit log.
+          Live counts from the database. Every action is written to the audit
+          log.
         </p>
       </div>
 
       {/* ── Stats strip ────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-4">
         <StatChip label="Members" value={String(overview.members)} />
-        <StatChip label="Confirmed bookings" value={String(overview.confirmedBookings)} accent />
+        <StatChip
+          label="Confirmed bookings"
+          value={String(overview.confirmedBookings)}
+          accent
+        />
         <StatChip label="Open reports" value={String(overview.openReports)} />
         <StatChip label="Venues" value={String(overview.venues)} />
       </div>
@@ -144,18 +164,29 @@ function AdminPage() {
               {reports.map((report) => {
                 const reportedUserId = report.reported_user_id;
                 return (
-                  <li key={report.id} className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                  <li
+                    key={report.id}
+                    className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
+                  >
                     <div className="flex min-w-0 flex-1 flex-col gap-1">
                       <p className="text-sm font-semibold capitalize text-foreground">
                         {report.reason.replace(/_/g, " ")}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {report.reportedUserLabel ? `Member: ${report.reportedUserLabel}` : null}
-                        {report.reportedUserLabel && report.venueName ? " · " : ""}
-                        {report.venueName ? `Venue: ${report.venueName}` : null}
+                        {report.reportedUserLabel
+                          ? `Member: ${report.reportedUserLabel}`
+                          : null}
+                        {report.reportedUserLabel && report.venueName
+                          ? " · "
+                          : ""}
+                        {report.venueName
+                          ? `Venue: ${report.venueName}`
+                          : null}
                       </p>
                       {report.description && (
-                        <p className="text-sm text-muted-foreground">{report.description}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {report.description}
+                        </p>
                       )}
                       <p className="text-xs tabular-nums text-muted-foreground">
                         Filed {report.created_at.slice(0, 10)}
@@ -198,7 +229,10 @@ function AdminPage() {
           ) : (
             <ul className="flex flex-col gap-3">
               {donations.map((donation) => (
-                <li key={donation.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+                <li
+                  key={donation.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
+                >
                   <div className="min-w-0">
                     <p className="text-sm font-semibold tabular-nums text-foreground">
                       {formatAmount(donation.amount_minor, donation.currency)}
@@ -236,17 +270,7 @@ function AdminPage() {
       {/* ── Bookings tab ───────────────────────────────────────── */}
       {activeTab === "bookings" && (
         <BookingsPanel
-          bookings={bookings}
-          busyId={busyId}
-          setBusyId={setBusyId}
-          onRefresh={() => router.invalidate()}
-        />
-      )}
-
-      {/* ── Bookings tab ───────────────────────────────────────── */}
-      {activeTab === "bookings" && (
-        <BookingsPanel
-          bookings={bookings}
+          initialBookings={bookings}
           busyId={busyId}
           setBusyId={setBusyId}
           onRefresh={() => router.invalidate()}
@@ -266,30 +290,50 @@ function AdminPage() {
       {/* ── Members tab ────────────────────────────────────────── */}
       {activeTab === "members" && (
         <MembersPanel
-          members={members}
+          initialMembers={members}
           busyId={busyId}
           suspend={suspend}
         />
       )}
+
+      {/* ── Audit log tab ──────────────────────────────────────── */}
+      {activeTab === "audit" && <AuditPanel />}
     </div>
   );
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Bookings panel — full list with status management
+   Bookings panel — full list with status management + load-more
    ══════════════════════════════════════════════════════════════════════════ */
 function BookingsPanel({
-  bookings,
+  initialBookings,
   busyId,
   setBusyId,
   onRefresh,
 }: {
-  bookings: AdminBooking[];
+  initialBookings: AdminBooking[];
   busyId: string | null;
   setBusyId: (id: string | null) => void;
   onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [bookings, setBookings] = useState(initialBookings);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const next = await fetchAdminBookings({ data: { page: page + 1 } });
+      setPage((p) => p + 1);
+      setBookings((prev) => [...prev, ...next]);
+    } catch {
+      toast.error("Could not load more bookings.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const visible = search.trim()
     ? bookings.filter(
@@ -307,6 +351,10 @@ function BookingsPanel({
       if (!result.ok) toast.error(result.error);
       else toast.success(`Booking marked ${status}`);
       onRefresh();
+      // Optimistic update in local state
+      setBookings((prev) =>
+        prev.map((b) => (b.id === id ? { ...b, status } : b)),
+      );
     } catch {
       toast.error("Could not reach the server.");
     } finally {
@@ -326,9 +374,13 @@ function BookingsPanel({
         <div className="relative">
           <svg
             className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
           >
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
           </svg>
           <input
             value={search}
@@ -337,7 +389,9 @@ function BookingsPanel({
             className="h-9 w-72 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <span className="text-xs text-muted-foreground">{visible.length} bookings</span>
+        <span className="text-xs text-muted-foreground">
+          {visible.length} bookings
+        </span>
       </div>
 
       {visible.length === 0 ? (
@@ -345,20 +399,25 @@ function BookingsPanel({
       ) : (
         <ul className="flex flex-col gap-2">
           {visible.map((b) => (
-            <li key={b.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <li
+              key={b.id}
+              className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
+            >
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <p className="text-sm font-semibold text-foreground">
                   {b.venue_name ?? b.venue_slug}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {b.booking_date} at {b.booking_time.slice(0, 5)} · {b.party_size}{" "}
-                  {b.party_size === 1 ? "person" : "people"}
+                  {b.booking_date} at {b.booking_time.slice(0, 5)} ·{" "}
+                  {b.party_size} {b.party_size === 1 ? "person" : "people"}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {b.user_name ?? "(no name)"} · {b.user_email ?? "no email"}
                 </p>
               </div>
-              <span className={`rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[b.status]}`}>
+              <span
+                className={`rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[b.status]}`}
+              >
                 {b.status}
               </span>
               <div className="flex gap-2">
@@ -382,6 +441,19 @@ function BookingsPanel({
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Load more */}
+      {bookings.length === (page + 1) * PAGE_SIZE && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="rounded-full border border-border bg-card px-6 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -421,8 +493,11 @@ function VenuesPanel({
       if (!result.ok) toast.error(result.error);
       else toast.success(is_active ? "Venue activated" : "Venue deactivated");
       onRefresh();
-    } catch { toast.error("Could not reach the server."); }
-    finally { setBusyId(null); }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
   }
 
   return (
@@ -443,7 +518,10 @@ function VenuesPanel({
         <VenueForm
           initial={editing}
           onClose={() => setShowForm(false)}
-          onSaved={() => { setShowForm(false); onRefresh(); }}
+          onSaved={() => {
+            setShowForm(false);
+            onRefresh();
+          }}
         />
       )}
 
@@ -452,23 +530,39 @@ function VenuesPanel({
       ) : (
         <ul className="flex flex-col gap-3">
           {venues.map((venue) => (
-            <li key={venue.slug} className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
+            <li
+              key={venue.slug}
+              className="flex flex-wrap items-start gap-4 rounded-2xl border border-border bg-card p-5 shadow-sm"
+            >
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-foreground">{venue.name}</p>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                    venue.is_active ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground"
-                  }`}>
+                  <p className="text-sm font-semibold text-foreground">
+                    {venue.name}
+                  </p>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      venue.is_active
+                        ? "bg-accent text-accent-foreground"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
                     {venue.is_active ? "Active" : "Inactive"}
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {venue.slug} · Ages {venue.min_age}–{venue.max_age} · {venue.capacity} seats
+                  {venue.slug} · Ages {venue.min_age}–{venue.max_age} ·{" "}
+                  {venue.capacity} seats
                 </p>
-                <p className="line-clamp-2 text-xs text-muted-foreground">{venue.description}</p>
+                <p className="line-clamp-2 text-xs text-muted-foreground">
+                  {venue.description}
+                </p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <ActionButton label="Edit" busy={false} onClick={() => openEdit(venue)} />
+                <ActionButton
+                  label="Edit"
+                  busy={false}
+                  onClick={() => openEdit(venue)}
+                />
                 <ActionButton
                   label={venue.is_active ? "Deactivate" : "Activate"}
                   busy={busyId === venue.slug}
@@ -524,7 +618,10 @@ function VenueForm({
           capacity: Number(capacity),
         },
       });
-      if (!result.ok) { setError(result.error); return; }
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       toast.success(isEdit ? "Venue updated" : "Venue created");
       onSaved();
     } catch (err) {
@@ -540,7 +637,10 @@ function VenueForm({
         <h3 className="text-base font-semibold text-foreground">
           {isEdit ? `Edit ${initial.name}` : "Add new venue"}
         </h3>
-        <button onClick={onClose} className="text-sm text-muted-foreground hover:text-foreground">
+        <button
+          onClick={onClose}
+          className="text-sm text-muted-foreground hover:text-foreground"
+        >
           Cancel
         </button>
       </div>
@@ -553,39 +653,93 @@ function VenueForm({
 
       <form onSubmit={handleSubmit} className="grid gap-4 sm:grid-cols-2">
         <Field label="Slug (URL key)" id="slug">
-          <Input id="slug" required value={slug} onChange={e => setSlug(e.target.value)}
-            disabled={isEdit} placeholder="mulliri" className="rounded-xl" />
+          <Input
+            id="slug"
+            required
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            disabled={isEdit}
+            placeholder="mulliri"
+            className="rounded-xl"
+          />
         </Field>
         <Field label="Name" id="name">
-          <Input id="name" required value={name} onChange={e => setName(e.target.value)}
-            placeholder="Mulliri Vjeter" className="rounded-xl" />
+          <Input
+            id="name"
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Mulliri Vjeter"
+            className="rounded-xl"
+          />
         </Field>
         <div className="sm:col-span-2">
           <Field label="Description" id="desc">
-            <Textarea id="desc" required value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="A short description of the venue" className="rounded-xl" />
+            <Textarea
+              id="desc"
+              required
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="A short description of the venue"
+              className="rounded-xl"
+            />
           </Field>
         </div>
         <Field label="Image URL (optional)" id="imageUrl">
-          <Input id="imageUrl" type="url" value={imageUrl}
-            onChange={e => setImageUrl(e.target.value)} placeholder="https://…" className="rounded-xl" />
+          <Input
+            id="imageUrl"
+            type="url"
+            value={imageUrl}
+            onChange={(e) => setImageUrl(e.target.value)}
+            placeholder="https://…"
+            className="rounded-xl"
+          />
         </Field>
         <Field label="Google Maps URL (optional)" id="locationUrl">
-          <Input id="locationUrl" type="url" value={locationUrl}
-            onChange={e => setLocationUrl(e.target.value)} placeholder="https://maps.google.com/…" className="rounded-xl" />
+          <Input
+            id="locationUrl"
+            type="url"
+            value={locationUrl}
+            onChange={(e) => setLocationUrl(e.target.value)}
+            placeholder="https://maps.google.com/…"
+            className="rounded-xl"
+          />
         </Field>
         <Field label="Min age" id="minAge">
-          <Input id="minAge" type="number" required min={18} max={99} value={minAge}
-            onChange={e => setMinAge(e.target.value)} className="rounded-xl" />
+          <Input
+            id="minAge"
+            type="number"
+            required
+            min={18}
+            max={99}
+            value={minAge}
+            onChange={(e) => setMinAge(e.target.value)}
+            className="rounded-xl"
+          />
         </Field>
         <Field label="Max age" id="maxAge">
-          <Input id="maxAge" type="number" required min={18} max={99} value={maxAge}
-            onChange={e => setMaxAge(e.target.value)} className="rounded-xl" />
+          <Input
+            id="maxAge"
+            type="number"
+            required
+            min={18}
+            max={99}
+            value={maxAge}
+            onChange={(e) => setMaxAge(e.target.value)}
+            className="rounded-xl"
+          />
         </Field>
         <Field label="Capacity (seats)" id="capacity">
-          <Input id="capacity" type="number" required min={1} max={10000} value={capacity}
-            onChange={e => setCapacity(e.target.value)} className="rounded-xl" />
+          <Input
+            id="capacity"
+            type="number"
+            required
+            min={1}
+            max={10000}
+            value={capacity}
+            onChange={(e) => setCapacity(e.target.value)}
+            className="rounded-xl"
+          />
         </Field>
 
         <div className="flex gap-3 sm:col-span-2">
@@ -596,8 +750,11 @@ function VenueForm({
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create venue"}
           </button>
-          <button type="button" onClick={onClose}
-            className="rounded-full border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full border border-border px-5 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+          >
             Cancel
           </button>
         </div>
@@ -607,18 +764,35 @@ function VenueForm({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   Members panel
+   Members panel — with load-more
    ══════════════════════════════════════════════════════════════════════════ */
 function MembersPanel({
-  members,
+  initialMembers,
   busyId,
   suspend,
 }: {
-  members: AdminMember[];
+  initialMembers: AdminMember[];
   busyId: string | null;
   suspend: (userId: string, suspended: boolean) => Promise<void>;
 }) {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [members, setMembers] = useState(initialMembers);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const next = await fetchMembers({ data: { page: page + 1 } });
+      setPage((p) => p + 1);
+      setMembers((prev) => [...prev, ...next]);
+    } catch {
+      toast.error("Could not load more members.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   const visible = search.trim()
     ? members.filter(
@@ -632,18 +806,26 @@ function MembersPanel({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <div className="relative">
-          <svg className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-            fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
+          <svg
+            className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <circle cx="11" cy="11" r="8" />
+            <path d="m21 21-4.35-4.35" />
           </svg>
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
             placeholder="Filter by name or email…"
             className="h-9 w-64 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
           />
         </div>
-        <span className="text-xs text-muted-foreground">{visible.length} members</span>
+        <span className="text-xs text-muted-foreground">
+          {visible.length} members
+        </span>
       </div>
 
       {visible.length === 0 ? (
@@ -651,10 +833,15 @@ function MembersPanel({
       ) : (
         <ul className="flex flex-col gap-2">
           {visible.map((member) => (
-            <li key={member.id} className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+            <li
+              key={member.id}
+              className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
+            >
               <div className="flex min-w-0 flex-1 items-center gap-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-semibold text-muted-foreground">
-                  {((member.display_name ?? member.email ?? "?")[0] ?? "?").toUpperCase()}
+                  {(
+                    (member.display_name ?? member.email ?? "?")[0] ?? "?"
+                  ).toUpperCase()}
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-foreground">
@@ -680,19 +867,173 @@ function MembersPanel({
           ))}
         </ul>
       )}
+
+      {/* Load more */}
+      {members.length === (page + 1) * PAGE_SIZE && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="rounded-full border border-border bg-card px-6 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Audit log panel
+   ══════════════════════════════════════════════════════════════════════════ */
+function AuditPanel() {
+  const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [page, setPage] = useState(-1);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 50;
+
+  // Initial load
+  if (page === -1 && !loading) {
+    setLoading(true);
+    fetchAuditLog({ data: { page: 0 } })
+      .then((rows) => {
+        setEntries(rows);
+        setPage(0);
+      })
+      .catch(() => toast.error("Could not load audit log."))
+      .finally(() => setLoading(false));
+  }
+
+  async function loadMore() {
+    setLoadingMore(true);
+    try {
+      const next = await fetchAuditLog({ data: { page: page + 1 } });
+      setPage((p) => p + 1);
+      setEntries((prev) => [...prev, ...next]);
+    } catch {
+      toast.error("Could not load more entries.");
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const ACTION_COLOURS: Record<string, string> = {
+    "report.actioned": "bg-destructive/10 text-destructive",
+    "report.dismissed": "bg-muted text-muted-foreground",
+    "donation.confirmed": "bg-accent text-accent-foreground",
+    "donation.failed": "bg-destructive/10 text-destructive",
+    "user.suspend": "bg-destructive/10 text-destructive",
+    "user.unsuspend": "bg-accent text-accent-foreground",
+    "venue.activate": "bg-accent text-accent-foreground",
+    "venue.deactivate": "bg-muted text-muted-foreground",
+    "venue.upsert": "bg-muted text-muted-foreground",
+    "booking.cancelled": "bg-destructive/10 text-destructive",
+    "booking.completed": "bg-accent text-accent-foreground",
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col gap-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-14 animate-pulse rounded-2xl bg-muted"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-xs text-muted-foreground">
+        Append-only log of every admin action. Records cannot be edited or deleted.
+      </p>
+
+      {entries.length === 0 ? (
+        <EmptyCard text="No audit entries yet." />
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {entries.map((entry) => (
+            <li
+              key={entry.id}
+              className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-3 shadow-sm"
+            >
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                      ACTION_COLOURS[entry.action] ??
+                      "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    {entry.action}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {entry.target_type}/{entry.target_id.slice(0, 8)}…
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  by {entry.actor_name ?? entry.actor_id.slice(0, 8)}…
+                  {Object.keys(entry.detail).length > 0
+                    ? ` · ${JSON.stringify(entry.detail)}`
+                    : ""}
+                </p>
+              </div>
+              <time
+                dateTime={entry.created_at}
+                className="shrink-0 text-[11px] tabular-nums text-muted-foreground"
+              >
+                {new Date(entry.created_at).toLocaleString([], {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })}
+              </time>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {entries.length === (page + 1) * PAGE_SIZE && (
+        <div className="flex justify-center">
+          <button
+            onClick={() => void loadMore()}
+            disabled={loadingMore}
+            className="rounded-full border border-border bg-card px-6 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+          >
+            {loadingMore ? "Loading…" : "Load more"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ── Shared helpers ────────────────────────────────────────────────────── */
 
-function StatChip({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+function StatChip({
+  label,
+  value,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+}) {
   return (
-    <div className={`flex min-w-[7rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
-      accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
-    }`}>
+    <div
+      className={`flex min-w-[7rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
+        accent
+          ? "bg-accent text-accent-foreground"
+          : "border border-border bg-card"
+      }`}
+    >
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xl font-semibold leading-none text-foreground">{value}</span>
+      <span className="text-xl font-semibold leading-none text-foreground">
+        {value}
+      </span>
     </div>
   );
 }
@@ -709,9 +1050,11 @@ function ActionButton({
   variant?: "default" | "primary" | "danger";
 }) {
   const styles = {
-    default: "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+    default:
+      "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground",
     primary: "bg-primary text-primary-foreground hover:opacity-90",
-    danger: "border border-destructive/40 text-destructive hover:bg-destructive/10",
+    danger:
+      "border border-destructive/40 text-destructive hover:bg-destructive/10",
   };
   return (
     <button
@@ -732,10 +1075,20 @@ function EmptyCard({ text }: { text: string }) {
   );
 }
 
-function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
+function Field({
+  label,
+  id,
+  children,
+}: {
+  label: string;
+  id: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id} className="text-xs font-medium">{label}</Label>
+      <Label htmlFor={id} className="text-xs font-medium">
+        {label}
+      </Label>
       {children}
     </div>
   );

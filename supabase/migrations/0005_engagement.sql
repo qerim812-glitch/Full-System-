@@ -5,8 +5,7 @@
 -- ============================================================================
 
 create table public.favorites (
-  user_id     uuid not null references auth.users on delete cascade,
-  venue_slug  text not null references public.venues on delete cascade,
+   venue_slug  text not null references public.venues on delete cascade,
   created_at  timestamptz not null default now(),
   primary key (user_id, venue_slug)
 );

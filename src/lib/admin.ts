@@ -529,6 +529,68 @@ export const fetchAdminBookings = createServerFn({ method: "GET" })
     });
   });
 
+/* ── Audit log ──────────────────────────────────────────────────────────── */
+
+export type AuditEntry = {
+  id: string;
+  actor_id: string;
+  action: string;
+  target_type: string;
+  target_id: string;
+  detail: Record<string, unknown>;
+  created_at: string;
+  actor_name: string | null;
+};
+
+export const fetchAuditLog = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z.object({ page: z.number().int().min(0).default(0) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<AuditEntry[]> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const PAGE = 50;
+
+    const { data: rows, error } = await supabase
+      .from("audit_log")
+      .select(
+        "id, actor_id, action, target_type, target_id, detail, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .range(data.page * PAGE, (data.page + 1) * PAGE - 1);
+
+    if (error) {
+      console.error("[admin] fetchAuditLog failed:", error.message);
+      return [];
+    }
+
+    const entries = rows ?? [];
+    const actorIds = [...new Set(entries.map((r) => r.actor_id as string))];
+    const profilesResult =
+      actorIds.length > 0
+        ? await supabase
+            .from("profiles")
+            .select("id, display_name, email")
+            .in("id", actorIds)
+        : { data: [], error: null };
+
+    const profileMap = new Map(
+      (profilesResult.data ?? []).map((p) => [p["id"], p]),
+    );
+
+    return entries.map((r) => {
+      const p = profileMap.get(r["actor_id"] as string);
+      return {
+        ...r,
+        detail: (r.detail ?? {}) as Record<string, unknown>,
+        actor_name:
+          (p?.["display_name"] as string | null) ??
+          (p?.["email"] as string | null) ??
+          null,
+      };
+    });
+  });
+
 const bookingStatusSchema = z.object({
   id: z.string().uuid(),
   status: z.enum(["confirmed", "cancelled", "completed"]),

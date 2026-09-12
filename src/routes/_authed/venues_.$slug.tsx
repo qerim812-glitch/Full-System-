@@ -37,8 +37,55 @@ export const Route = createFileRoute("/_authed/venues_/$slug")({
     ]);
     return { detail, favorites, myReview, canReview };
   },
+  pendingComponent: VenueDetailSkeleton,
+  errorComponent: ({ error }) => {
+    const message =
+      error instanceof Error ? error.message : "Something went wrong.";
+    return (
+      <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-20 text-center">
+        <h1 className="text-base font-semibold text-foreground">
+          Could not load venue
+        </h1>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">{message}</p>
+        <Link
+          to="/venues"
+          className="mt-5 inline-flex items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-sm hover:border-foreground/20"
+        >
+          Back to venues
+        </Link>
+      </div>
+    );
+  },
   component: VenueDetailPage,
 });
+
+/* ── Skeleton shown while the loader is in-flight ─────────────────── */
+function VenueDetailSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="h-9 w-32 animate-pulse rounded-full bg-muted" />
+      <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
+        <div className="flex flex-col gap-5">
+          <div className="aspect-[16/9] w-full animate-pulse rounded-2xl bg-muted" />
+          <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+          <div className="flex gap-3">
+            {[1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                className="h-12 w-24 animate-pulse rounded-xl bg-muted"
+              />
+            ))}
+          </div>
+          <div className="space-y-2">
+            <div className="h-4 w-full animate-pulse rounded bg-muted" />
+            <div className="h-4 w-4/5 animate-pulse rounded bg-muted" />
+          </div>
+        </div>
+        <div className="h-72 animate-pulse rounded-2xl bg-muted" />
+      </div>
+    </div>
+  );
+}
 
 function VenueDetailPage() {
   const { detail, favorites, myReview, canReview } = Route.useLoaderData();
@@ -57,7 +104,28 @@ function VenueDetailPage() {
 
   if (!detail) {
     return (
-      <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
+      <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-20 text-center">
+        <svg
+          className="mb-5 h-16 w-16 text-muted-foreground/30"
+          viewBox="0 0 80 80"
+          fill="none"
+          aria-hidden
+        >
+          <circle
+            cx="40"
+            cy="40"
+            r="36"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeDasharray="6 4"
+          />
+          <path
+            d="M26 40h28M40 26v28"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+        </svg>
         <h1 className="text-base font-semibold text-foreground">
           Venue not found
         </h1>
@@ -66,7 +134,7 @@ function VenueDetailPage() {
         </p>
         <Link
           to="/venues"
-          className="mt-4 inline-flex items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm hover:border-foreground/20"
+          className="mt-5 inline-flex items-center rounded-full border border-border bg-card px-4 py-2 text-sm font-medium shadow-sm hover:border-foreground/20"
         >
           Back to venues
         </Link>
@@ -111,7 +179,6 @@ function VenueDetailPage() {
 
   return (
     <div className="flex flex-col gap-8">
-
       {/* ── Back crumb ──────────────────────────────────────────────── */}
       <Link
         to="/venues"
@@ -131,10 +198,8 @@ function VenueDetailPage() {
 
       {/* ── Main two-column panel ────────────────────────────────────── */}
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-
         {/* LEFT — venue identity card */}
         <div className="flex flex-col gap-5">
-
           {/* Hero image */}
           {venue.image_url ? (
             <img
@@ -182,9 +247,12 @@ function VenueDetailPage() {
             </div>
           </div>
 
-          {/* Stats strip — mirrors the vital-signs row */}
+          {/* Stats strip */}
           <div className="flex flex-wrap gap-3">
-            <StatChip label="Age range" value={`${venue.min_age}–${venue.max_age}`} />
+            <StatChip
+              label="Age range"
+              value={`${venue.min_age}–${venue.max_age}`}
+            />
             <StatChip label="Capacity" value={String(venue.capacity)} />
             <StatChip
               label="Rating"
@@ -199,7 +267,7 @@ function VenueDetailPage() {
             {venue.description}
           </p>
 
-          {/* ── Tab pills — Overview / Reviews / Chat ── */}
+          {/* ── Tab pills ── */}
           <div className="flex gap-2 border-b border-border pb-1">
             {(["overview", "reviews", "chat"] as const).map((tab) => (
               <button
@@ -226,8 +294,6 @@ function VenueDetailPage() {
                   ? "No visits yet. Book a table below to be the first."
                   : `${reviews.length} visit${reviews.length > 1 ? "s" : ""} recorded.`}
               </p>
-
-              {/* Horizontal booking timeline */}
               {timelineEvents.length > 0 && (
                 <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
                   <h3 className="mb-4 text-sm font-semibold text-foreground">
@@ -256,32 +322,57 @@ function VenueDetailPage() {
                 </p>
               ) : (
                 <ul className="flex flex-col gap-3">
-                  {reviews.map((review) => (
-                    <li
-                      key={review.id}
-                      className="rounded-2xl border border-border bg-card p-4 shadow-sm"
-                    >
-                      <div className="flex items-center justify-between">
-                        <StarRating rating={review.rating} />
-                        <span className="text-xs text-muted-foreground">
-                          {review.rating} / 5
-                        </span>
-                      </div>
-                      {review.comment ? (
-                        <p className="mt-2 text-sm text-muted-foreground">
-                          {review.comment}
-                        </p>
-                      ) : null}
-                    </li>
-                  ))}
+                  {reviews.map((review) => {
+                    /* Author display name from the joined public_profiles row */
+                    const authorName =
+                      (
+                        review as unknown as {
+                          public_profiles?: { display_name: string | null };
+                        }
+                      ).public_profiles?.display_name ?? "Member";
+
+                    return (
+                      <li
+                        key={review.id}
+                        className="rounded-2xl border border-border bg-card p-4 shadow-sm"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            {/* Author avatar initial */}
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground">
+                              {(authorName[0] ?? "M").toUpperCase()}
+                            </div>
+                            <span className="text-xs font-medium text-foreground">
+                              {authorName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <StarRating rating={review.rating} />
+                            <span className="text-xs text-muted-foreground">
+                              {review.rating}/5
+                            </span>
+                          </div>
+                        </div>
+                        {review.comment ? (
+                          <p className="mt-2 text-sm text-muted-foreground">
+                            {review.comment}
+                          </p>
+                        ) : null}
+                        <time
+                          dateTime={review.created_at}
+                          className="mt-1.5 block text-[11px] text-muted-foreground/60"
+                        >
+                          {new Date(review.created_at).toLocaleDateString()}
+                        </time>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
           )}
 
-          {activeTab === "chat" && (
-            <VenueChat venueSlug={venue.slug} />
-          )}
+          {activeTab === "chat" && <VenueChat venueSlug={venue.slug} />}
         </div>
 
         {/* RIGHT — floating booking card */}
@@ -313,24 +404,37 @@ function VenueDetailPage() {
               </Alert>
             ) : null}
 
+            {/* Location — pill picker instead of <select> */}
             {locations.length > 0 ? (
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="location" className="text-xs font-medium">
-                  Location
-                </Label>
-                <select
-                  id="location"
-                  value={locationId}
-                  onChange={(e) => setLocationId(e.target.value)}
-                  className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                >
-                  <option value="">Any location</option>
+                <Label className="text-xs font-medium">Location</Label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setLocationId("")}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                      locationId === ""
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                    }`}
+                  >
+                    Any
+                  </button>
                   {locations.map((loc) => (
-                    <option key={loc.id} value={loc.id}>
+                    <button
+                      key={loc.id}
+                      type="button"
+                      onClick={() => setLocationId(loc.id)}
+                      className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
+                        locationId === loc.id
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
+                      }`}
+                    >
                       {loc.name}
-                    </option>
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             ) : null}
 
@@ -455,13 +559,20 @@ function SlotPicker({
     let cancelled = false;
     setLoading(true);
     fetchAvailability({ data: { slug: venueSlug, date } })
-      .then((rows) => { if (!cancelled) setAvailability(rows); })
-      .catch(() => { if (!cancelled) setAvailability([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .then((rows) => {
+        if (!cancelled) setAvailability(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailability([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [venueSlug, date]);
 
-  // Build a map: time → seats_left (missing time = fully available)
   const slotsLeft = new Map(
     availability.map((r) => [r.booking_time.slice(0, 5), r.seats_left]),
   );
@@ -469,7 +580,9 @@ function SlotPicker({
   return (
     <div className="flex flex-wrap gap-2">
       {TIME_SLOTS.map((slot) => {
-        const left = slotsLeft.has(slot) ? (slotsLeft.get(slot) ?? 0) : capacity;
+        const left = slotsLeft.has(slot)
+          ? (slotsLeft.get(slot) ?? 0)
+          : capacity;
         const full = left <= 0;
         const low = !full && left <= Math.ceil(capacity * 0.2);
 
@@ -502,7 +615,9 @@ function SlotPicker({
               </span>
             )}
             {loading && (
-              <span className="mt-0.5 text-[9px] text-muted-foreground/50">…</span>
+              <span className="mt-0.5 text-[9px] text-muted-foreground/50">
+                …
+              </span>
             )}
           </button>
         );
@@ -535,11 +650,15 @@ function StarRating({ rating }: { rating: number }) {
 
 /* ── Build timeline from reviews ─────────────────────────────────── */
 function buildTimeline(
-  reviews: Array<{ id: string; rating: number; comment?: string | null; created_at?: string }>,
+  reviews: Array<{
+    id: string;
+    rating: number;
+    comment?: string | null;
+    created_at?: string;
+  }>,
 ): TimelineEvent[] {
   if (reviews.length === 0) return [];
 
-  // Group by month (last 6 reviews max)
   const recent = reviews.slice(0, 6);
   const byMonth = new Map<string, typeof recent>();
 
