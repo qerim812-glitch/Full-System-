@@ -857,8 +857,8 @@ create or replace function public.fix_missing_profile()
 returns text language plpgsql security definer set search_path = ''
 as $$
 declare
-  v_user_id uuid   := auth.uid();
-  v_email   citext;
+  v_user_id uuid    := auth.uid();
+  v_email   text;
   v_name    text;
   v_dob     date;
   v_count   integer;
@@ -866,14 +866,14 @@ begin
   if v_user_id is null then raise exception 'You must be signed in'; end if;
   select count(*) into v_count from public.profiles where id = v_user_id;
   if v_count > 0 then return 'ok:already_exists'; end if;
-  select u.email::citext,
+  select u.email::text,
          nullif(u.raw_user_meta_data ->> 'display_name', ''),
          (u.raw_user_meta_data ->> 'date_of_birth')::date
     into v_email, v_name, v_dob
     from auth.users u where u.id = v_user_id;
   if v_dob is null then v_dob := (current_date - interval '18 years')::date; end if;
   insert into public.profiles (id, email, display_name, date_of_birth)
-  values (v_user_id, v_email, v_name, v_dob);
+  values (v_user_id, v_email::citext, v_name, v_dob);
   return 'ok:created';
 end;
 $$;

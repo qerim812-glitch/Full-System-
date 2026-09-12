@@ -321,7 +321,7 @@ set search_path = ''
 as $$
 declare
   v_user_id  uuid   := auth.uid();
-  v_email    citext;
+  v_email    text;
   v_name     text;
   v_dob      date;
   v_count    integer;
@@ -340,7 +340,7 @@ begin
 
   -- Reach into auth.users (only possible via security definer)
   select
-    u.email::citext,
+    u.email::text,
     nullif(u.raw_user_meta_data ->> 'display_name', ''),
     (u.raw_user_meta_data ->> 'date_of_birth')::date
   into v_email, v_name, v_dob
@@ -353,7 +353,7 @@ begin
   end if;
 
   insert into public.profiles (id, email, display_name, date_of_birth)
-  values (v_user_id, v_email, v_name, v_dob);
+  values (v_user_id, v_email::citext, v_name, v_dob);
 
   return 'ok:created';
 end;
