@@ -2,6 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import { FavoriteButton } from "../../components/FavoriteButton";
+import {
+  StatChipSkeleton,
+  VenueCardSkeletonGrid,
+} from "../../components/Skeletons";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { fetchVenues, type Venue } from "../../lib/venues";
 
@@ -13,6 +17,7 @@ export const Route = createFileRoute("/_authed/venues")({
     ]);
     return { venues, favorites };
   },
+  pendingComponent: VenuesSkeleton,
   component: VenuesPage,
   errorComponent: () => (
     <EmptyState
@@ -21,6 +26,19 @@ export const Route = createFileRoute("/_authed/venues")({
     />
   ),
 });
+
+function VenuesSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-1">
+        <div className="h-8 w-32 animate-pulse rounded-lg bg-muted" />
+        <div className="h-4 w-64 animate-pulse rounded-lg bg-muted" />
+      </div>
+      <StatChipSkeleton count={4} />
+      <VenueCardSkeletonGrid count={6} />
+    </div>
+  );
+}
 
 function VenuesPage() {
   const { venues, favorites } = Route.useLoaderData();

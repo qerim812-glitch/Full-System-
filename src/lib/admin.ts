@@ -481,10 +481,11 @@ export const fetchAdminBookings = createServerFn({ method: "GET" })
     const supabase = getSupabaseServerClient();
     const PAGE = 50;
 
+    // Fetch bookings with venue name (venues RLS allows admin reads)
     const { data: rows, error } = await supabase
       .from("bookings")
       .select(
-        "id, venue_slug, booking_date, booking_time, party_size, status, created_at, venues(name), profiles(display_name, email)",
+        "id, user_id, venue_slug, booking_date, booking_time, party_size, status, created_at, venues(name)",
       )
       .order("booking_date", { ascending: false })
       .order("booking_time", { ascending: false })
@@ -495,18 +496,37 @@ export const fetchAdminBookings = createServerFn({ method: "GET" })
       return [];
     }
 
-    return (rows ?? []).map((r: Record<string, unknown>) => ({
-      id: r["id"] as string,
-      venue_slug: r["venue_slug"] as string,
-      booking_date: r["booking_date"] as string,
-      booking_time: r["booking_time"] as string,
-      party_size: r["party_size"] as number,
-      status: r["status"] as AdminBooking["status"],
-      created_at: r["created_at"] as string,
-      venue_name: (r["venues"] as { name: string } | null)?.name ?? null,
-      user_name: (r["profiles"] as { display_name: string | null } | null)?.display_name ?? null,
-      user_email: (r["profiles"] as { email: string | null } | null)?.email ?? null,
-    }));
+    const bookings = rows ?? [];
+
+    // Separate profiles lookup — "profiles: admin reads all" covers this
+    const userIds = [...new Set(bookings.map((b: Record<string, unknown>) => b["user_id"] as string))];
+    const profilesResult = userIds.length > 0
+      ? await supabase.from("profiles").select("id, display_name, email").in("id", userIds)
+      : { data: [], error: null };
+
+    if (profilesResult.error) {
+      console.error("[admin] fetchAdminBookings profiles lookup failed:", profilesResult.error.message);
+    }
+
+    const profileMap = new Map(
+      (profilesResult.data ?? []).map((p: Record<string, unknown>) => [p["id"] as string, p]),
+    );
+
+    return bookings.map((r: Record<string, unknown>) => {
+      const profile = profileMap.get(r["user_id"] as string);
+      return {
+        id: r["id"] as string,
+        venue_slug: r["venue_slug"] as string,
+        booking_date: r["booking_date"] as string,
+        booking_time: r["booking_time"] as string,
+        party_size: r["party_size"] as number,
+        status: r["status"] as AdminBooking["status"],
+        created_at: r["created_at"] as string,
+        venue_name: (r["venues"] as { name: string } | null)?.name ?? null,
+        user_name: (profile?.["display_name"] as string | null) ?? null,
+        user_email: (profile?.["email"] as string | null) ?? null,
+      };
+    });
   });
 
 const bookingStatusSchema = z.object({

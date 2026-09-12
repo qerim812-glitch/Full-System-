@@ -1,13 +1,25 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { StatChipSkeleton, ThreadSkeletonList } from "../../components/Skeletons";
 import { fetchDmThreads } from "../../lib/messaging";
 import { searchPeople, type PublicProfile } from "../../lib/people";
 
 export const Route = createFileRoute("/_authed/messages")({
   loader: async () => ({ threads: await fetchDmThreads() }),
+  pendingComponent: MessagesSkeleton,
   component: MessagesPage,
 });
+
+function MessagesSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
+      <StatChipSkeleton count={2} />
+      <ThreadSkeletonList count={4} />
+    </div>
+  );
+}
 
 function MessagesPage() {
   const { threads } = Route.useLoaderData();

@@ -1,12 +1,14 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { BookingRowSkeletonList, StatChipSkeleton } from "../../components/Skeletons";
 import { cancelBooking, fetchMyBookings, type Booking } from "../../lib/bookings";
 import { todayInTirana } from "../../lib/utils";
 import { EmptyState } from "./venues";
 
 export const Route = createFileRoute("/_authed/bookings")({
   loader: async () => ({ bookings: await fetchMyBookings() }),
+  pendingComponent: BookingsSkeleton,
   component: BookingsPage,
   errorComponent: () => (
     <EmptyState
@@ -15,6 +17,16 @@ export const Route = createFileRoute("/_authed/bookings")({
     />
   ),
 });
+
+function BookingsSkeleton() {
+  return (
+    <div className="flex flex-col gap-8">
+      <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
+      <StatChipSkeleton count={4} />
+      <BookingRowSkeletonList count={3} />
+    </div>
+  );
+}
 
 function BookingsPage() {
   const { bookings } = Route.useLoaderData();
@@ -51,6 +63,14 @@ function BookingsPage() {
         <EmptyState
           title="No bookings yet"
           body="Pick a venue and choose a time to make your first reservation."
+          action={
+            <Link
+              to="/venues"
+              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              Browse venues
+            </Link>
+          }
         />
       ) : (
         <>
@@ -59,12 +79,6 @@ function BookingsPage() {
         </>
       )}
 
-      <Link
-        to="/venues"
-        className="w-fit rounded-full border border-border bg-card px-5 py-2 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
-      >
-        Browse venues
-      </Link>
     </div>
   );
 }

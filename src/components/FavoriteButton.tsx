@@ -7,14 +7,8 @@ import { setFavorite } from "../lib/favorites";
 import { cn } from "../lib/utils";
 
 /**
- * Optimistic on purpose: the heart flips immediately and reverts if the
- * server disagrees. A favourite is low-stakes enough that waiting on a round
- * trip reads as a broken button.
- *
- * Note for callers on the venue list: this renders a <button>, so it must not
- * be placed inside the card's <Link>. Nesting a button in an anchor is
- * invalid HTML and screen readers handle it inconsistently — render it as a
- * sibling of the link instead.
+ * Optimistic heart button. Flips immediately and reverts on server error.
+ * Must NOT be nested inside the venue card's <Link> — render as a sibling.
  */
 export function FavoriteButton({
   venueSlug,
@@ -33,19 +27,13 @@ export function FavoriteButton({
     const next = !favorited;
     setFavorited(next);
     setPending(true);
-
     try {
-      const result = await setFavorite({
-        data: { venueSlug, favorited: next },
-      });
-
+      const result = await setFavorite({ data: { venueSlug, favorited: next } });
       if (!result.ok) {
         setFavorited(!next);
         toast.error(result.error);
         return;
       }
-      // Trust the server's answer over the guess, in case a concurrent
-      // request already changed the state.
       setFavorited(result.favorited);
       await router.invalidate();
     } catch {
@@ -64,14 +52,15 @@ export function FavoriteButton({
       aria-pressed={favorited}
       aria-label={favorited ? "Remove from favourites" : "Add to favourites"}
       className={cn(
-        "inline-flex size-8 items-center justify-center rounded-full border border-border bg-background/90 backdrop-blur transition-colors hover:bg-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60",
+        "inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card/90 shadow-sm backdrop-blur transition-all hover:scale-110 hover:border-foreground/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60",
+        favorited && "border-transparent bg-red-50 dark:bg-red-950/30",
         className,
       )}
     >
       <Heart
         aria-hidden="true"
         className={cn(
-          "size-4",
+          "h-4 w-4 transition-colors",
           favorited ? "fill-red-500 text-red-500" : "text-muted-foreground",
         )}
       />
