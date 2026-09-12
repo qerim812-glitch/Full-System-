@@ -8,6 +8,7 @@ export type Profile = {
   email: string;
   display_name: string | null;
   date_of_birth: string;
+  avatar_url: string | null;
   is_suspended: boolean;
   created_at: string;
 };
@@ -19,7 +20,7 @@ export const fetchMyProfile = createServerFn({ method: "GET" }).handler(
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "id, email, display_name, date_of_birth, is_suspended, created_at",
+        "id, email, display_name, date_of_birth, avatar_url, is_suspended, created_at",
       )
       .maybeSingle();
 
@@ -107,3 +108,26 @@ export const exportMyData = createServerFn({ method: "POST" }).handler(
     };
   },
 );
+
+const avatarSchema = z.object({
+  avatarUrl: z.string().url(),
+});
+
+export const updateAvatarUrl = createServerFn({ method: "POST" })
+  .validator((data: unknown) => avatarSchema.parse(data))
+  .handler(async ({ data }) => {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const, error: "You are not signed in." };
+
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase
+      .from("profiles")
+      .update({ avatar_url: data.avatarUrl })
+      .eq("id", user.id);
+
+    if (error) {
+      console.error("[profile] updateAvatarUrl failed:", error.message);
+      return { ok: false as const, error: "Could not save avatar URL." };
+    }
+    return { ok: true as const };
+  });

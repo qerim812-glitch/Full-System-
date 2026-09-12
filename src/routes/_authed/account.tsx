@@ -6,7 +6,7 @@ import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { fetchMyBlocks, unblockUser } from "../../lib/messaging";
-import { exportMyData, fetchMyProfile, updateProfile } from "../../lib/profile";
+import { exportMyData, fetchMyProfile, updateAvatarUrl, updateProfile } from "../../lib/profile";
 import { getSupabaseBrowserClient } from "../../lib/supabase/browser";
 
 export const Route = createFileRoute("/_authed/account")({
@@ -37,7 +37,7 @@ function AccountPage() {
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
   const [status, setStatus] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatar_url ?? null);
   const [avatarBusy, setAvatarBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -49,20 +49,26 @@ function AccountPage() {
     setAvatarBusy(true);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { toast.error("Not signed in"); return; }
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) { toast.error("Not signed in"); return; }
 
       const ext = file.name.split(".").pop() ?? "jpg";
-      const path = `avatars/${user.id}.${ext}`;
+      const path = `avatars/${authUser.id}.${ext}`;
 
-      const { error } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("avatars")
         .upload(path, file, { upsert: true, contentType: file.type });
 
-      if (error) { toast.error("Upload failed: " + error.message); return; }
+      if (uploadError) { toast.error("Upload failed: " + uploadError.message); return; }
 
       const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(path);
-      setAvatarUrl(publicUrl + "?t=" + Date.now());
+      const urlWithBust = publicUrl + "?t=" + Date.now();
+
+      // Persist to profiles table so it survives page reload
+      const saveResult = await updateAvatarUrl({ data: { avatarUrl: publicUrl } });
+      if (!saveResult.ok) { toast.error(saveResult.error); return; }
+
+      setAvatarUrl(urlWithBust);
       toast.success("Avatar updated!");
     } finally {
       setAvatarBusy(false);
