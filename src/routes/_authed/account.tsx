@@ -12,6 +12,7 @@ import {
   updateAvatarUrl,
   updateProfile,
 } from "../../lib/profile";
+import { fixMissingProfile } from "../../lib/social";
 import { getSupabaseBrowserClient } from "../../lib/supabase/browser";
 
 export const Route = createFileRoute("/_authed/account")({
@@ -245,13 +246,7 @@ function AccountPage() {
       </div>
 
       {!profile ? (
-        <Alert variant="destructive">
-          <AlertDescription>
-            No profile row was found for this account. If the migrations were
-            applied after you signed up, the profile trigger did not run — sign
-            up again or insert the row manually.
-          </AlertDescription>
-        </Alert>
+        <NoProfileCard onFixed={() => router.invalidate()} />
       ) : (
         <>
           {/* ── Stats strip ─────────────────────────────────────── */}
@@ -504,6 +499,54 @@ function AccountPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function NoProfileCard({ onFixed }: { onFixed: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleFix() {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await fixMissingProfile();
+      if (!result.ok) {
+        setError(result.error ?? "Could not create profile.");
+        return;
+      }
+      toast.success("Profile created! Reloading…");
+      onFixed();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+      <h2 className="mb-2 text-base font-semibold text-foreground">
+        Profile not found
+      </h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        No profile row exists for this account. This happens when an account
+        was created before the database migrations were applied (common for
+        the first admin). Click below to create it automatically.
+      </p>
+      {error && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+      <button
+        onClick={() => void handleFix()}
+        disabled={busy}
+        className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {busy ? "Creating profile…" : "Create my profile"}
+      </button>
     </div>
   );
 }

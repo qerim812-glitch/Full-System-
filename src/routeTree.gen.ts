@@ -20,6 +20,7 @@ import { Route as AuthedBookingsRouteImport } from './routes/_authed/bookings'
 import { Route as AuthedDonateRouteImport } from './routes/_authed/donate'
 import { Route as AuthedFavouritesRouteImport } from './routes/_authed/favourites'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
+import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
 import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
 import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues_.$slug'
@@ -78,6 +79,11 @@ const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedPeopleRoute = AuthedPeopleRouteImport.update({
+  id: '/people',
+  path: '/people',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
   id: '/venues',
   path: '/venues',
@@ -105,6 +111,7 @@ export interface FileRoutesByFullPath {
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
   '/messages': typeof AuthedMessagesRoute
+  '/people': typeof AuthedPeopleRoute
   '/venues': typeof AuthedVenuesRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
@@ -120,6 +127,7 @@ export interface FileRoutesByTo {
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
   '/messages': typeof AuthedMessagesRoute
+  '/people': typeof AuthedPeopleRoute
   '/venues': typeof AuthedVenuesRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
@@ -137,6 +145,7 @@ export interface FileRoutesById {
   '/_authed/donate': typeof AuthedDonateRoute
   '/_authed/favourites': typeof AuthedFavouritesRoute
   '/_authed/messages': typeof AuthedMessagesRoute
+  '/_authed/people': typeof AuthedPeopleRoute
   '/_authed/venues': typeof AuthedVenuesRoute
   '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
   '/_authed/venues_/$slug': typeof AuthedVenuesSlugRoute
@@ -154,6 +163,7 @@ export interface FileRouteTypes {
     | '/donate'
     | '/favourites'
     | '/messages'
+    | '/people'
     | '/venues'
     | '/messages/$userId'
     | '/venues/$slug'
@@ -169,6 +179,7 @@ export interface FileRouteTypes {
     | '/donate'
     | '/favourites'
     | '/messages'
+    | '/people'
     | '/venues'
     | '/messages/$userId'
     | '/venues/$slug'
@@ -185,6 +196,7 @@ export interface FileRouteTypes {
     | '/_authed/donate'
     | '/_authed/favourites'
     | '/_authed/messages'
+    | '/_authed/people'
     | '/_authed/venues'
     | '/_authed/messages_/$userId'
     | '/_authed/venues_/$slug'
@@ -277,6 +289,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedMessagesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/people': {
+      id: '/_authed/people'
+      path: '/people'
+      fullPath: '/people'
+      preLoaderRoute: typeof AuthedPeopleRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/venues': {
       id: '/_authed/venues'
       path: '/venues'
@@ -308,6 +327,7 @@ interface AuthedRouteChildren {
   AuthedDonateRoute: typeof AuthedDonateRoute
   AuthedFavouritesRoute: typeof AuthedFavouritesRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
+  AuthedPeopleRoute: typeof AuthedPeopleRoute
   AuthedVenuesRoute: typeof AuthedVenuesRoute
   AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
   AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
@@ -320,6 +340,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedDonateRoute: AuthedDonateRoute,
   AuthedFavouritesRoute: AuthedFavouritesRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,
+  AuthedPeopleRoute: AuthedPeopleRoute,
   AuthedVenuesRoute: AuthedVenuesRoute,
   AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
   AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,

@@ -7,10 +7,17 @@ import {
   ThreadSkeletonList,
 } from "../../components/Skeletons";
 import { fetchDmThreads, markAllRead } from "../../lib/messaging";
+import { fetchMyConnections } from "../../lib/social";
 import { searchPeople, type PublicProfile } from "../../lib/people";
 
 export const Route = createFileRoute("/_authed/messages")({
-  loader: async () => ({ threads: await fetchDmThreads() }),
+  loader: async () => {
+    const [threads, connections] = await Promise.all([
+      fetchDmThreads(),
+      fetchMyConnections(),
+    ]);
+    return { threads, connections };
+  },
   pendingComponent: MessagesSkeleton,
   errorComponent: () => (
     <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
@@ -60,7 +67,7 @@ function formatMessageTime(isoString: string): string {
 }
 
 function MessagesPage() {
-  const { threads } = Route.useLoaderData();
+  const { threads, connections } = Route.useLoaderData();
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PublicProfile[] | null>(null);
@@ -68,6 +75,13 @@ function MessagesPage() {
   const [markingRead, setMarkingRead] = useState(false);
 
   const totalUnread = threads.reduce((s, t) => s + t.unread, 0);
+
+  // Build set of user ids already in threads so we don't duplicate
+  const threadUserIds = new Set(threads.map((t) => t.other.id));
+  // Connections not yet in any thread — show as quick-start
+  const connectionShortcuts = connections.filter(
+    (c) => !threadUserIds.has(c.user_id),
+  );
 
   async function handleSearch(event: React.FormEvent) {
     event.preventDefault();
@@ -159,6 +173,30 @@ function MessagesPage() {
           {searching ? "Searching…" : "Search"}
         </button>
       </form>
+
+      {/* ── Connection quick-starts ─────────────────────────────── */}
+      {connectionShortcuts.length > 0 && results === null && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Connections — start a conversation
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {connectionShortcuts.map((conn) => (
+              <Link
+                key={conn.user_id}
+                to="/messages/$userId"
+                params={{ userId: conn.user_id }}
+                className="flex items-center gap-2 rounded-full border border-border bg-card px-4 py-2 text-sm font-medium text-foreground shadow-sm transition-all hover:border-foreground/20"
+              >
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
+                  {((conn.display_name?.trim() ?? "M")[0] ?? "M").toUpperCase()}
+                </div>
+                {conn.display_name?.trim() || "Member"}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Search results ──────────────────────────────────────── */}
       {results !== null && (

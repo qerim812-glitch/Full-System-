@@ -15,6 +15,12 @@ import { Label } from "../../components/ui/label";
 import { createBooking } from "../../lib/bookings";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
+import {
+  checkInToVenue,
+  checkOutFromVenue,
+  fetchVenueSocialFeed,
+  type PresenceEntry,
+} from "../../lib/social";
 import { todayInTirana } from "../../lib/utils";
 import { fetchAvailability, fetchVenue } from "../../lib/venues";
 
@@ -98,7 +104,7 @@ function VenueDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "chat">(
+  const [activeTab, setActiveTab] = useState<"overview" | "reviews" | "chat" | "going">(
     "overview",
   );
 
@@ -269,7 +275,7 @@ function VenueDetailPage() {
 
           {/* ── Tab pills ── */}
           <div className="flex gap-2 border-b border-border pb-1">
-            {(["overview", "reviews", "chat"] as const).map((tab) => (
+            {(["overview", "reviews", "chat", "going"] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -281,7 +287,9 @@ function VenueDetailPage() {
               >
                 {tab === "reviews"
                   ? `Reviews${reviews.length > 0 ? ` (${reviews.length})` : ""}`
-                  : tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  : tab === "going"
+                    ? "Who's going"
+                    : tab.charAt(0).toUpperCase() + tab.slice(1)}
               </button>
             ))}
           </div>
@@ -373,6 +381,10 @@ function VenueDetailPage() {
           )}
 
           {activeTab === "chat" && <VenueChat venueSlug={venue.slug} />}
+
+          {activeTab === "going" && (
+            <SocialFeedPanel venueSlug={venue.slug} date={date} />
+          )}
         </div>
 
         {/* RIGHT — floating booking card */}
@@ -644,6 +656,178 @@ function StarRating({ rating }: { rating: number }) {
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
         </svg>
       ))}
+    </div>
+  );
+}
+
+/* ── Social feed panel — who from your connections is going ─────── */
+function SocialFeedPanel({
+  venueSlug,
+  date,
+}: {
+  venueSlug: string;
+  date: string;
+}) {
+  const router = useRouter();
+  const [feed, setFeed] = useState<PresenceEntry[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+  const [note, setNote] = useState("");
+  const [myEntry, setMyEntry] = useState<PresenceEntry | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetchVenueSocialFeed({ data: { venueSlug, date } })
+      .then((rows) => {
+        if (!cancelled) setFeed(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setFeed([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [venueSlug, date]);
+
+  async function handleCheckIn(e: React.FormEvent) {
+    e.preventDefault();
+    setCheckingIn(true);
+    try {
+      const result = await checkInToVenue({
+        data: { venueSlug, date, note: note.trim() || undefined },
+      });
+      if (result.ok) {
+        setMyEntry({ user_id: "me", display_name: "You", avatar_url: null, note: note.trim() || null, checkin_date: date });
+        setNote("");
+        // Refresh feed
+        const rows = await fetchVenueSocialFeed({ data: { venueSlug, date } });
+        setFeed(rows);
+        await router.invalidate();
+      }
+    } finally {
+      setCheckingIn(false);
+    }
+  }
+
+  async function handleCheckOut() {
+    setCheckingIn(true);
+    try {
+      await checkOutFromVenue({ data: { venueSlug, date } });
+      setMyEntry(null);
+      const rows = await fetchVenueSocialFeed({ data: { venueSlug, date } });
+      setFeed(rows);
+      await router.invalidate();
+    } finally {
+      setCheckingIn(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Announce you're going */}
+      {myEntry ? (
+        <div className="flex items-center justify-between rounded-2xl border border-accent bg-accent/10 px-5 py-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              You're going on {date}
+            </p>
+            {myEntry.note && (
+              <p className="text-xs text-muted-foreground">{myEntry.note}</p>
+            )}
+          </div>
+          <button
+            onClick={() => void handleCheckOut()}
+            disabled={checkingIn}
+            className="rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+          >
+            Remove
+          </button>
+        </div>
+      ) : (
+        <form
+          onSubmit={handleCheckIn}
+          className="flex flex-wrap items-end gap-3 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
+        >
+          <div className="flex flex-1 flex-col gap-1 min-w-[180px]">
+            <label className="text-xs font-medium text-muted-foreground">
+              Tell your connections you're going
+            </label>
+            <input
+              type="text"
+              maxLength={280}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Optional note, e.g. arriving at 21:00"
+              className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={checkingIn}
+            className="rounded-full bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {checkingIn ? "Saving…" : "I'm going"}
+          </button>
+        </form>
+      )}
+
+      {/* Feed */}
+      <div>
+        <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Connections going on {date}
+        </h3>
+        {loading ? (
+          <div className="flex flex-col gap-2">
+            {[1, 2].map((i) => (
+              <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted" />
+            ))}
+          </div>
+        ) : !feed || feed.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border px-5 py-8 text-center">
+            <p className="text-sm text-muted-foreground">
+              None of your connections have announced they're going here on this date.
+            </p>
+            <Link
+              to="/people"
+              className="mt-3 inline-flex rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground"
+            >
+              Find connections →
+            </Link>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {feed.map((entry) => (
+              <li
+                key={entry.user_id}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card px-4 py-3 shadow-sm"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                  {((entry.display_name ?? "M")[0] ?? "M").toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-foreground">
+                    {entry.display_name ?? "Member"}
+                  </p>
+                  {entry.note && (
+                    <p className="text-xs text-muted-foreground">{entry.note}</p>
+                  )}
+                </div>
+                <Link
+                  to="/messages/$userId"
+                  params={{ userId: entry.user_id }}
+                  className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
+                >
+                  Message
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }
