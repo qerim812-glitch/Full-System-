@@ -1,6 +1,6 @@
 import { useRouter } from "@tanstack/react-router";
 import { Heart } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { setFavorite } from "../lib/favorites";
@@ -22,6 +22,12 @@ export function FavoriteButton({
   const router = useRouter();
   const [favorited, setFavorited] = useState(initialFavorited);
   const [pending, setPending] = useState(false);
+
+  // The loader re-runs after router.invalidate(); adopt its answer so the
+  // heart never disagrees with the server once the request has settled.
+  useEffect(() => {
+    setFavorited(initialFavorited);
+  }, [initialFavorited]);
 
   async function handleClick() {
     const next = !favorited;

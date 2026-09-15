@@ -1,5 +1,6 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useState } from "react";
+import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { Input } from "../components/ui/input";
@@ -24,6 +25,11 @@ function ForgotPasswordPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setMessage(null);
+      toast.error("Enter a valid email address.");
+      return;
+    }
     setBusy(true);
     try {
       const result = await requestPasswordReset({ data: { email } });

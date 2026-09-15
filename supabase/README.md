@@ -1,137 +1,107 @@
 # NewPop database
 
-Phase 1 of the build plan. Twelve tables, row-level security on every one of
-them, seeded with the seven real venues and eighteen Tirana locations.
+Postgres on Supabase. Row-level security is enabled on every table and is
+the application's authorization boundary — the server functions in
+`src/lib` rely on it rather than filtering by `user_id` themselves.
 
-## Run order
+## Setting up a fresh project
 
-Run these **in order**. Each depends on the ones before it.
+Run these in the **SQL Editor**, one file at a time, in this order:
 
-| # | File | Creates |
-|---|------|---------|
-| 1 | `migrations/0001_foundation.sql` | Extensions, `is_admin()`, `age_years()`, `touch_updated_at()` |
-| 2 | `migrations/0002_profiles.sql` | `profiles` + 18+ age rule + auto-create-on-signup trigger |
-| 3 | `migrations/0003_venues.sql` | `venues`, `venue_locations` |
-| 4 | `migrations/0004_bookings.sql` | `bookings` + `book_venue()` + `venue_availability()` |
-| 5 | `migrations/0005_engagement.sql` | `favorites`, `reviews` |
-| 6 | `migrations/0006_messaging.sql` | `blocks`, `chat_messages`, `direct_messages` |
-| 7 | `migrations/0007_moderation.sql` | `reports`, `audit_log` |
-| 8 | `migrations/0008_donations.sql` | `donations` |
-| 9 | `migrations/0009_booking_completion.sql` | `complete_past_bookings()` + its pg_cron schedule |
-| 10 | `migrations/0010_profile_visibility.sql` | `public_profiles` view + `blocked_user_ids()` |
-| 11 | `migrations/0011_bookings_cancel_lockdown.sql` | Trigger restricting bookings UPDATEs to a confirmed→cancelled status change only |
-| 12 | `seed/0001_venues.sql` | The 7 venues |
-| 13 | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues x 18 locations) |
+| #   | File                            | What it does                                                                                                                                                                                                                                                                                                                                                |
+| --- | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `migrations/0013_complete.sql`  | The whole base schema in one idempotent file: profiles, venues, venue_locations, bookings (+ `book_venue()`, `venue_availability()`, cancel-only trigger, `complete_past_bookings()` on pg_cron), favorites, reviews, blocks, chat_messages, direct_messages, reports, audit_log, donations, connections, presence_checkins, `public_profiles`, social RPCs |
+| 2   | `migrations/0014_hardening.sql` | Security + feature follow-up (see below). Safe to re-run.                                                                                                                                                                                                                                                                                                   |
+| 3   | `seed/0001_venues.sql`          | The 7 Tirana venues                                                                                                                                                                                                                                                                                                                                         |
+| 4   | `seed/0002_venue_locations.sql` | 54 branch rows (3 venues × 18 locations)                                                                                                                                                                                                                                                                                                                    |
 
-### Option A — Supabase SQL Editor
+The numbered files `0001`–`0012` are the historical, incremental versions of
+what `0013` contains. You do **not** run them on a fresh project; they are
+kept for the record.
 
-Open your project → **SQL Editor** → paste each file's contents → **Run**.
-One file at a time, top to bottom. Stop if any errors.
+`0013` and `0014` are both idempotent, so they can also be run on top of a
+database that already has some of `0001`–`0012` applied.
 
-### Option B — Supabase CLI
+### What 0014 changes
 
-```sh
-supabase link --project-ref <your-project-ref>
-supabase db push                                  # runs migrations/
-psql "$DATABASE_URL" -f supabase/seed/0001_venues.sql
-psql "$DATABASE_URL" -f supabase/seed/0002_venue_locations.sql
-```
+- `public_profiles` is now owner-executed (not `security_invoker`). Before
+  this, a normal member querying the view saw only their own row, so People
+  search returned nothing and every chat / DM author rendered as "Member".
+- Foreign keys from `reviews` and `chat_messages` to `profiles`, and a
+  `venue_rating_summary` view.
+- Column-guard triggers: members can only change `display_name` and
+  `avatar_url` on their profile (no more self-unsuspend or date-of-birth
+  edits); connection responses can only change `status`; DMs can only be
+  marked read; reviews can only change rating/comment. `audit_log` inserts
+  require `is_admin()`.
+- `book_venue()` rejects same-day slots already in the past (closing a
+  fake-review shortcut), checks the venue's opening hours, uses a branch's
+  own capacity when set, and stores `notes` + a `confirmation_code`.
+  `reschedule_booking()` moves a booking atomically.
+- Venue columns: `opens_at`, `closes_at`, `slot_minutes`, `address`,
+  `phone`, `category`, `price_band`. Branch columns: `capacity`, `address`.
+- `avatars` storage bucket (public read, owner-scoped writes, 2 MB,
+  JPEG/PNG/WebP).
+- `notifications` table, the triggers that fill it, and `unread_counts()`.
+- Per-user rate limits enforced by triggers on `chat_messages` (20/min),
+  `direct_messages` (30/min), `reports` (5/h), `connections` (20/h).
+- Indexes for DM threads, audit log, member list and trigram name search;
+  a unique index that stops A→B and B→A connection rows coexisting.
+- `fix_missing_profile()` refuses to invent a date of birth;
+  `delete_my_account()` for GDPR erasure.
 
-The seed files are idempotent — re-running them updates rows in place rather
-than failing, so you can edit values and re-run.
+After running it, in **Authentication → URL Configuration** add
+`https://<your-domain>/auth/callback` to the redirect allow-list.
 
 ## Verify it worked
 
 ```sql
--- 12 tables, every one with RLS enabled. Any 'f' here is a security hole.
-select tablename, rowsecurity
-from pg_tables
-where schemaname = 'public'
-order by tablename;
+-- Every public table must show rowsecurity = t.
+select tablename, rowsecurity from pg_tables
+where schemaname = 'public' order by tablename;
 
--- Should be 7 venues and 54 branches.
-select (select count(*) from venues) as venues,
-       (select count(*) from venue_locations) as branches;
+-- Venues + branches + the 0014 columns are present.
+select count(*) venues, (select count(*) from venue_locations) branches,
+       (select count(*) from information_schema.columns
+         where table_name = 'venues' and column_name = 'opens_at') has_hours
+from venues;
+
+-- The cron job that completes past bookings (needed for reviews).
+select jobname, schedule from cron.job where jobname = 'complete-past-bookings';
+
+-- The avatars bucket.
+select id, public, allowed_mime_types from storage.buckets where id = 'avatars';
 ```
 
 ## Making someone an admin
 
-Admin is a JWT claim in **`app_metadata`**, checked by `is_admin()`.
-
-This is not interchangeable with `user_metadata`. `user_metadata` is writable
-by the user through the client SDK, so a role stored there can be self-granted
-— a normal account could set `is_admin: true` on itself and read every
-booking, report, and private message in the database. `app_metadata` can only
-be written with the service-role key.
-
-Promote a user from a **server-side** script only:
-
-```js
-import { createClient } from "@supabase/supabase-js";
-
-const admin = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY   // never ship this to the browser
-);
-
-await admin.auth.admin.updateUserById(userId, {
-  app_metadata: { role: "admin" },        // app_metadata, not user_metadata
-});
-```
-
-The user must sign out and back in afterwards — the claim is baked into the
-JWT at issue time, so an existing session keeps its old one until refresh.
-
-**Never hardcode an admin password in a committed file.** The
-`scripts/seed-admin.mjs` on the `v0/supabase-auth-login` branch contains a
-literal password in a public repository; if that script has been run against a
-live project, change that account's password.
+Admin is the JWT claim `app_metadata.role = 'admin'`, checked by
+`is_admin()`. It is **not** interchangeable with `user_metadata`, which users
+can write themselves through the client SDK. Promote from a server-side
+script only (`scripts/promote-admin.mjs`, needs the service-role key). The
+user must sign out and back in afterwards.
 
 ## Notes on the schema
 
-- **Ages are dates, not buckets.** `profiles.date_of_birth` replaces the
-  prototype's `ageRange` string. The four registration buckets (`18-24`,
-  `25-30`, …) could never be compared against a venue's `min_age`, and a
-  stored bucket goes stale as the user ages. Every bucket is now derived.
-- **Bookings only go through `book_venue()`.** There is deliberately no insert
-  policy on `bookings`, so the client SDK cannot write the table directly and
-  bypass capacity or age checks. The function takes a row lock on the venue
-  before counting seats, which is what makes it safe under concurrent load.
-- **Bookings must reach `completed` or reviews break.** `0009` adds
-  `complete_past_bookings()` and schedules it every 15 minutes via pg_cron.
-  Without it nothing ever sets `status = 'completed'`, so the
-  "reviews: write own after visiting" policy in `0005` can never be
-  satisfied and every review insert is rejected. **pg_cron must be enabled**
-  (Dashboard > Database > Extensions); the migration raises a warning rather
-  than failing the whole file if it is not.
-- **A booking's UPDATE is restricted to cancelling, not just to your own row.**
-  `"bookings: cancel own"` (0004) only proves `auth.uid() = user_id`; on its
-  own it would let a user set their own booking straight to `'completed'`
-  (forging a reviewable visit) or edit `party_size`/date/time after
-  `book_venue()`'s capacity check ran. `0011` adds a trigger enforcing that a
-  non-admin, non-system UPDATE may only flip `confirmed → cancelled` with
-  every other column unchanged; it also redefines `complete_past_bookings()`
-  to flag its own UPDATE as trusted via a transaction-local setting.
-- **Messaging needs `0010` or it is unusable.** `profiles` grants only
-  "read own", so without the `public_profiles` view every chat author renders
-  as "Member" and member search returns nothing — meaning no one can start a
-  direct message at all. The view exposes `display_name` and `avatar_url`
-  only, never `email` or `date_of_birth`. A broad policy plus column `GRANT`s
-  cannot substitute for it: column privileges attach to the role, not the
-  policy, so hiding a column from strangers also hides it from its owner.
-- **`blocked_user_ids()` exists because blocks are one-directional to read.**
-  `"blocks: manage own"` returns only the people you blocked, never those who
-  blocked you. That is deliberate, but it means the app cannot filter them out
-  of search without this `security definer` helper.
-- **Blocking ships with messaging**, in the same migration, not as a
-  follow-up.
-- **`audit_log` is append-only** — no update or delete policy exists for
-  anyone, admins included.
-- **Money is stored in minor units** (`amount_minor` bigint), never a float.
+- **Ages are dates, not buckets.** `profiles.date_of_birth` is compared with
+  a venue's `min_age`/`max_age` at booking time via `age_years()`.
+- **Bookings only go through `book_venue()` / `reschedule_booking()`.**
+  There is no insert policy on `bookings`, and the cancel-only trigger
+  restricts member updates to `confirmed → cancelled`.
+- **Bookings must reach `completed` or reviews break.**
+  `complete_past_bookings()` runs every 15 minutes via pg_cron; enable the
+  extension in Dashboard → Database → Extensions if the migration warned.
+- **Blocks are one-directional to read**, so `blocked_user_ids()` (security
+  definer) exists to filter both directions in search and feeds.
+- **`audit_log` is append-only** — no update or delete policy for anyone.
+- **Money is stored in minor units** (`amount_minor`), never a float.
+- **Capacity is per venue by default**, and per branch when
+  `venue_locations.capacity` is set. Set real numbers before launch; the seed
+  values are placeholders.
 
 ## Changing the age policy
 
-One place: the `min_age` constant in `public.enforce_minimum_age()` in
-`migrations/0002_profiles.sql`. Admitting 16–17s is *not* just that constant —
-it also needs a guardian-consent table and age-segregated direct messages,
-because the app pairs a live per-venue age breakdown with private messaging.
+One place: the `min_age` constant in `public.enforce_minimum_age()`.
+Admitting 16–17s is not just that constant — it also needs guardian consent
+and age-segregated direct messages, because the app pairs live per-venue
+presence with private messaging.

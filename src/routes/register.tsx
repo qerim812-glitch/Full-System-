@@ -62,6 +62,18 @@ function RegisterPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Enter a valid email address");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      return;
+    }
+    if (!dateOfBirth) {
+      setError("Enter your date of birth");
+      return;
+    }
     if (password !== confirm) {
       setError("The two passwords do not match");
       return;

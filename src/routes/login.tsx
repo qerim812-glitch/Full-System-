@@ -37,8 +37,16 @@ function LoginPage() {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setBusy(true);
     setError(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setError("Enter your password.");
+      return;
+    }
+    setBusy(true);
     try {
       const result = await signIn({ data: { email, password } });
       if (!result.ok) {
