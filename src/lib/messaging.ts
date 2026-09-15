@@ -251,10 +251,15 @@ export const fetchDmThread = createServerFn({ method: "GET" })
     const user = await getCurrentUser();
     if (!user) return { messages: [], other: null, otherName: "Member" };
 
+    // Both directions of exactly this pair. Filtering on the counterpart
+    // alone would, for an admin (who can read every DM for moderation),
+    // return that person's conversations with everyone.
     const { data: rows, error } = await supabase
       .from("direct_messages")
       .select("id, body, created_at, sender_id, recipient_id, read_at")
-      .or(`sender_id.eq.${data.userId},recipient_id.eq.${data.userId}`)
+      .or(
+        `and(sender_id.eq.${data.userId},recipient_id.eq.${user.id}),and(sender_id.eq.${user.id},recipient_id.eq.${data.userId})`,
+      )
       .order("created_at", { ascending: false })
       .limit(100);
 

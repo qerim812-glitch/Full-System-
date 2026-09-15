@@ -1,57 +1,64 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
 
+import { Avatar } from "../../components/Avatar";
+import { ConfirmButton } from "../../components/ConfirmButton";
+import { EmptyState } from "../../components/EmptyState";
 import {
+  PageHeader,
+  RouteError,
+  SearchInput,
+  pillClass,
+  primaryPillClass,
+} from "../../components/PageChrome";
+import { PillTabs, tabPanelProps } from "../../components/PillTabs";
+import { StatChipSkeleton } from "../../components/Skeletons";
+import { StatChip } from "../../components/StatChip";
+import { searchPeople, type PublicProfile } from "../../lib/people";
+import { pageHead } from "../../lib/seo";
+import {
+  checkInToVenue,
+  checkOutFromVenue,
   fetchMyCheckins,
   fetchMyConnections,
   fetchPendingRequests,
+  fetchSentRequests,
+  removeConnection,
   respondToRequest,
   sendConnectionRequest,
-  checkInToVenue,
-  checkOutFromVenue,
-  removeConnection,
   type Connection,
   type PendingRequest,
 } from "../../lib/social";
-import { fetchVenues, type Venue } from "../../lib/venues";
-import { searchPeople, type PublicProfile } from "../../lib/people";
-import { todayInTirana } from "../../lib/utils";
+import { formatBookingDate, formatDate, todayInTirana } from "../../lib/utils";
+import { fetchVenues } from "../../lib/venues";
+
+type Tab = "connections" | "requests" | "going" | "discover";
 
 export const Route = createFileRoute("/_authed/people")({
   loader: async () => {
-    const [connections, pending, checkins, venues] = await Promise.all([
+    const [connections, pending, sent, checkins, venues] = await Promise.all([
       fetchMyConnections(),
       fetchPendingRequests(),
+      fetchSentRequests(),
       fetchMyCheckins(),
       fetchVenues(),
     ]);
-    return { connections, pending, checkins, venues };
+    return { connections, pending, sent, checkins, venues };
   },
+  head: () =>
+    pageHead("People", "Connect with members going to the same venues."),
   pendingComponent: PeopleSkeleton,
-  errorComponent: () => (
-    <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
-      <h2 className="text-base font-semibold text-foreground">
-        Could not load People
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Refresh the page to try again.
-      </p>
-    </div>
-  ),
+  errorComponent: () => <RouteError title="Could not load People" />,
   component: PeoplePage,
 });
 
 function PeopleSkeleton() {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8" aria-busy>
       <div className="h-8 w-36 animate-pulse rounded-lg bg-muted" />
-      <div className="flex gap-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-16 w-28 animate-pulse rounded-2xl bg-muted" />
-        ))}
-      </div>
-      <div className="h-12 w-64 animate-pulse rounded-full bg-muted" />
+      <StatChipSkeleton count={3} />
+      <div className="h-10 w-64 animate-pulse rounded-full bg-muted" />
       <div className="flex flex-col gap-3">
         {[1, 2, 3].map((i) => (
           <div key={i} className="h-20 animate-pulse rounded-2xl bg-muted" />
@@ -61,27 +68,47 @@ function PeopleSkeleton() {
   );
 }
 
-function PeoplePage() {
-  const { connections, pending, checkins, venues } = Route.useLoaderData();
-  const router = useRouter();
+type Result = { ok: boolean; error?: string };
 
-  const [tab, setTab] = useState<"connections" | "requests" | "discover" | "going">(
+function PeoplePage() {
+  const { connections, pending, sent, checkins, venues } =
+    Route.useLoaderData();
+  const router = useRouter();
+  const tabsId = useId();
+
+  const [tab, setTab] = useState<Tab>(
     pending.length > 0 ? "requests" : "connections",
   );
-
-  // Discover — search
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<PublicProfile[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  // Going tonight — check-in
   const [checkInVenue, setCheckInVenue] = useState("");
   const [checkInDate, setCheckInDate] = useState(todayInTirana());
   const [checkInNote, setCheckInNote] = useState("");
   const [checkInBusy, setCheckInBusy] = useState(false);
 
   const venueMap = new Map(venues.map((v) => [v.slug, v]));
+  const connectedIds = new Set(connections.map((c) => c.user_id));
+  const incomingIds = new Set(pending.map((p) => p.requester_id));
+  const sentIds = new Set(sent.map((s) => s.addressee_id));
+
+  async function run(id: string, fn: () => Promise<Result>, okMsg?: string) {
+    setBusyId(id);
+    try {
+      const result = await fn();
+      if (!result.ok) toast.error(result.error ?? "Something went wrong.");
+      else {
+        if (okMsg) toast.success(okMsg);
+        await router.invalidate();
+      }
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -89,53 +116,10 @@ function PeoplePage() {
     setSearching(true);
     try {
       setResults(await searchPeople({ data: { query: query.trim() } }));
+    } catch {
+      toast.error("Search failed. Try again.");
     } finally {
       setSearching(false);
-    }
-  }
-
-  async function handleConnect(userId: string) {
-    setBusyId(userId);
-    try {
-      const result = await sendConnectionRequest({ data: { userId } });
-      if (!result.ok) toast.error(result.error);
-      else {
-        toast.success("Connection request sent!");
-        await router.invalidate();
-      }
-    } catch {
-      toast.error("Could not reach the server.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function handleRespond(connectionId: string, accept: boolean) {
-    setBusyId(connectionId);
-    try {
-      const result = await respondToRequest({ data: { connectionId, accept } });
-      if (!result.ok) toast.error(result.error);
-      else {
-        toast.success(accept ? "Connected!" : "Request declined.");
-        await router.invalidate();
-      }
-    } catch {
-      toast.error("Could not reach the server.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  async function handleRemove(connectionId: string) {
-    setBusyId(connectionId);
-    try {
-      const result = await removeConnection({ data: { connectionId } });
-      if (!result.ok) toast.error(result.error);
-      else await router.invalidate();
-    } catch {
-      toast.error("Could not reach the server.");
-    } finally {
-      setBusyId(null);
     }
   }
 
@@ -153,7 +137,7 @@ function PeoplePage() {
       });
       if (!result.ok) toast.error(result.error);
       else {
-        toast.success("Check-in saved! Your connections can see you're going.");
+        toast.success("Saved. Your connections can see you're going.");
         setCheckInNote("");
         await router.invalidate();
       }
@@ -164,21 +148,12 @@ function PeoplePage() {
     }
   }
 
-  async function handleCheckOut(venueSlug: string, date: string) {
-    setBusyId(`${venueSlug}-${date}`);
-    try {
-      const result = await checkOutFromVenue({ data: { venueSlug, date } });
-      if (!result.ok) toast.error(result.error);
-      else await router.invalidate();
-    } catch {
-      toast.error("Could not reach the server.");
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  const TABS = [
-    { id: "connections" as const, label: "Connections", badge: connections.length },
+  const tabs = [
+    {
+      id: "connections" as const,
+      label: "Connections",
+      badge: connections.length,
+    },
     { id: "requests" as const, label: "Requests", badge: pending.length },
     { id: "going" as const, label: "Going out", badge: checkins.length },
     { id: "discover" as const, label: "Discover" },
@@ -186,56 +161,46 @@ function PeoplePage() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          People
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Connect with others going to the same venues.
-        </p>
-      </div>
+      <PageHeader
+        title="People"
+        subtitle="Connect with others going to the same venues."
+      />
 
-      {/* ── Stats strip ─────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-4">
-        <StatChip label="Connections" value={String(connections.length)} accent={connections.length > 0} />
-        <StatChip label="Pending" value={String(pending.length)} accent={pending.length > 0} />
+        <StatChip
+          label="Connections"
+          value={String(connections.length)}
+          accent={connections.length > 0}
+        />
+        <StatChip
+          label="Requests"
+          value={String(pending.length)}
+          accent={pending.length > 0}
+        />
         <StatChip label="Going out" value={String(checkins.length)} />
       </div>
 
-      {/* ── Tab pills ────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2 border-b border-border pb-1">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`relative rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
-              tab === t.id
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label}
-            {t.badge != null && t.badge > 0 && (
-              <span className="ml-1.5 inline-flex h-4 min-w-[1rem] items-center justify-center rounded-full bg-accent px-1 text-[9px] font-bold text-accent-foreground">
-                {t.badge}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
+      <PillTabs
+        tabs={tabs}
+        value={tab}
+        onChange={setTab}
+        label="People sections"
+      />
 
-      {/* ── Connections tab ──────────────────────────────────────── */}
-      {tab === "connections" && (
-        <section className="flex flex-col gap-3">
+      {tab === "connections" ? (
+        <section
+          {...tabPanelProps(tabsId, "connections")}
+          className="flex flex-col gap-3"
+        >
           {connections.length === 0 ? (
-            <EmptyCard
+            <EmptyState
               title="No connections yet"
               body="Go to Discover to find people and send connection requests."
               action={
                 <button
+                  type="button"
                   onClick={() => setTab("discover")}
-                  className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+                  className={primaryPillClass()}
                 >
                   Discover people
                 </button>
@@ -247,20 +212,31 @@ function PeoplePage() {
                 <ConnectionRow
                   key={conn.connection_id}
                   connection={conn}
-                  busyId={busyId}
-                  onRemove={handleRemove}
+                  busy={busyId === conn.connection_id}
+                  onRemove={() =>
+                    run(
+                      conn.connection_id,
+                      () =>
+                        removeConnection({
+                          data: { connectionId: conn.connection_id },
+                        }),
+                      "Connection removed.",
+                    )
+                  }
                 />
               ))}
             </ul>
           )}
         </section>
-      )}
+      ) : null}
 
-      {/* ── Requests tab ─────────────────────────────────────────── */}
-      {tab === "requests" && (
-        <section className="flex flex-col gap-3">
+      {tab === "requests" ? (
+        <section
+          {...tabPanelProps(tabsId, "requests")}
+          className="flex flex-col gap-6"
+        >
           {pending.length === 0 ? (
-            <EmptyCard
+            <EmptyState
               title="No pending requests"
               body="When someone wants to connect with you, their request appears here."
             />
@@ -270,85 +246,160 @@ function PeoplePage() {
                 <RequestRow
                   key={req.connection_id}
                   request={req}
-                  busyId={busyId}
-                  onRespond={handleRespond}
+                  busy={busyId === req.connection_id}
+                  onRespond={(accept) =>
+                    run(
+                      req.connection_id,
+                      () =>
+                        respondToRequest({
+                          data: { connectionId: req.connection_id, accept },
+                        }),
+                      accept ? "Connected!" : "Request declined.",
+                    )
+                  }
                 />
               ))}
             </ul>
           )}
-        </section>
-      )}
 
-      {/* ── Going out tab ────────────────────────────────────────── */}
-      {tab === "going" && (
-        <section className="flex flex-col gap-6">
-          {/* Add check-in form */}
+          {sent.length > 0 ? (
+            <div className="flex flex-col gap-3">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                Sent by you
+              </h2>
+              <ul className="flex flex-col gap-2">
+                {sent.map((s) => (
+                  <li
+                    key={s.connection_id}
+                    className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-3 shadow-sm"
+                  >
+                    <Avatar
+                      name={s.display_name}
+                      url={s.avatar_url}
+                      size="sm"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <Link
+                        to="/people/$userId"
+                        params={{ userId: s.addressee_id }}
+                        className="text-sm font-semibold text-foreground hover:underline"
+                      >
+                        {s.display_name?.trim() || "Member"}
+                      </Link>
+                      <p className="text-xs text-muted-foreground">
+                        Requested {formatDate(s.requested_at)} · awaiting reply
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={busyId === s.connection_id}
+                      onClick={() =>
+                        run(
+                          s.connection_id,
+                          () =>
+                            removeConnection({
+                              data: { connectionId: s.connection_id },
+                            }),
+                          "Request withdrawn.",
+                        )
+                      }
+                      className={pillClass("text-xs")}
+                    >
+                      Withdraw
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {tab === "going" ? (
+        <section
+          {...tabPanelProps(tabsId, "going")}
+          className="flex flex-col gap-6"
+        >
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
             <h2 className="mb-1 text-base font-semibold text-foreground">
               Announce you're going out
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Let your connections know where you'll be. They'll see this in
-              the venue's social feed.
+              Let your connections know where you'll be. They'll see it in the
+              venue's "Who's going" tab.
             </p>
             <form onSubmit={handleCheckIn} className="flex flex-col gap-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
+                  <label
+                    htmlFor="checkin-venue"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
                     Venue
                   </label>
                   <select
+                    id="checkin-venue"
                     required
                     value={checkInVenue}
                     onChange={(e) => setCheckInVenue(e.target.value)}
-                    className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   >
                     <option value="">Choose a venue…</option>
                     {venues.map((v) => (
-                      <option key={v.slug} value={v.slug}>{v.name}</option>
+                      <option key={v.slug} value={v.slug}>
+                        {v.name}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
+                  <label
+                    htmlFor="checkin-date"
+                    className="text-xs font-medium text-muted-foreground"
+                  >
                     Date
                   </label>
                   <input
+                    id="checkin-date"
                     type="date"
                     required
                     min={todayInTirana()}
                     value={checkInDate}
                     onChange={(e) => setCheckInDate(e.target.value)}
-                    className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                   />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">
-                  Note <span className="text-muted-foreground/60">(optional)</span>
+                <label
+                  htmlFor="checkin-note"
+                  className="text-xs font-medium text-muted-foreground"
+                >
+                  Note{" "}
+                  <span className="text-muted-foreground/60">(optional)</span>
                 </label>
                 <input
+                  id="checkin-note"
                   type="text"
                   maxLength={280}
                   value={checkInNote}
                   onChange={(e) => setCheckInNote(e.target.value)}
                   placeholder="Arriving around 21:00…"
-                  className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               </div>
               <button
                 type="submit"
                 disabled={checkInBusy || !checkInVenue}
-                className="w-fit rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                className={primaryPillClass("w-fit")}
               >
                 {checkInBusy ? "Saving…" : "Let connections know"}
               </button>
             </form>
           </div>
 
-          {/* My upcoming check-ins */}
           {checkins.length === 0 ? (
-            <EmptyCard
+            <EmptyState
               title="No upcoming plans"
               body="Use the form above to announce where you're going. Your connections will see it."
             />
@@ -358,16 +409,12 @@ function PeoplePage() {
                 Your upcoming plans
               </h2>
               <ul className="flex flex-col gap-2">
-                {(checkins as Array<{
-                  id: string;
-                  venue_slug: string;
-                  checkin_date: string;
-                  note: string | null;
-                  venues: { name: string; image_url: string | null } | null;
-                }>).map((ci) => {
+                {checkins.map((ci) => {
                   const venue = venueMap.get(ci.venue_slug);
-                  const imgUrl = (ci.venues as { image_url: string | null } | null)?.image_url ?? venue?.image_url ?? null;
-                  const name = (ci.venues as { name: string } | null)?.name ?? venue?.name ?? ci.venue_slug;
+                  const imgUrl =
+                    ci.venues?.image_url ?? venue?.image_url ?? null;
+                  const name = ci.venues?.name ?? venue?.name ?? ci.venue_slug;
+                  const key = `${ci.venue_slug}-${ci.checkin_date}`;
                   return (
                     <li
                       key={ci.id}
@@ -383,18 +430,34 @@ function PeoplePage() {
                         <div className="h-12 w-12 shrink-0 rounded-xl bg-muted" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-foreground">
+                        <Link
+                          to="/venues/$slug"
+                          params={{ slug: ci.venue_slug }}
+                          className="text-sm font-semibold text-foreground hover:underline"
+                        >
                           {name}
-                        </p>
+                        </Link>
                         <p className="text-xs text-muted-foreground">
-                          {ci.checkin_date}
+                          {formatBookingDate(ci.checkin_date)}
                           {ci.note ? ` · ${ci.note}` : ""}
                         </p>
                       </div>
                       <button
-                        onClick={() => void handleCheckOut(ci.venue_slug, ci.checkin_date)}
-                        disabled={busyId === `${ci.venue_slug}-${ci.checkin_date}`}
-                        className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+                        type="button"
+                        onClick={() =>
+                          run(key, () =>
+                            checkOutFromVenue({
+                              data: {
+                                venueSlug: ci.venue_slug,
+                                date: ci.checkin_date,
+                              },
+                            }),
+                          )
+                        }
+                        disabled={busyId === key}
+                        className={pillClass("shrink-0 text-xs", {
+                          danger: true,
+                        })}
                       >
                         Remove
                       </button>
@@ -405,38 +468,33 @@ function PeoplePage() {
             </div>
           )}
         </section>
-      )}
+      ) : null}
 
-      {/* ── Discover tab ─────────────────────────────────────────── */}
-      {tab === "discover" && (
-        <section className="flex flex-col gap-5">
-          <form onSubmit={handleSearch} className="flex items-center gap-3">
-            <div className="relative">
-              <svg
-                className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
-                fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-              >
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.35-4.35" />
-              </svg>
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search by name…"
-                aria-label="Search people"
-                className="h-9 w-64 rounded-full border border-border bg-card pl-9 pr-4 text-sm text-foreground shadow-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
+      {tab === "discover" ? (
+        <section
+          {...tabPanelProps(tabsId, "discover")}
+          className="flex flex-col gap-5"
+        >
+          <form
+            onSubmit={handleSearch}
+            className="flex flex-wrap items-center gap-3"
+          >
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder="Search by name…"
+              label="Search people"
+            />
             <button
               type="submit"
               disabled={searching || query.trim().length < 2}
-              className="rounded-full bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+              className={primaryPillClass()}
             >
               {searching ? "Searching…" : "Search"}
             </button>
           </form>
 
-          {results !== null && (
+          {results !== null ? (
             <div className="flex flex-col gap-3">
               <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                 {results.length === 0
@@ -445,212 +503,184 @@ function PeoplePage() {
               </h2>
               <ul className="flex flex-col gap-2">
                 {results.map((person) => {
-                  const isConnected = connections.some(
-                    (c) => c.user_id === person.id,
-                  );
-                  const isPending = pending.some(
-                    (p) => p.requester_id === person.id,
-                  );
+                  const state = connectedIds.has(person.id)
+                    ? "connected"
+                    : incomingIds.has(person.id)
+                      ? "incoming"
+                      : sentIds.has(person.id)
+                        ? "sent"
+                        : "none";
                   return (
                     <li
                       key={person.id}
-                      className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
+                      className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm"
                     >
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-                        {(
-                          (person.display_name?.trim() ?? "M")[0] ?? "M"
-                        ).toUpperCase()}
-                      </div>
+                      <Avatar
+                        name={person.display_name}
+                        url={person.avatar_url}
+                      />
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-foreground">
+                        <Link
+                          to="/people/$userId"
+                          params={{ userId: person.id }}
+                          className="text-sm font-semibold text-foreground hover:underline"
+                        >
                           {person.display_name?.trim() || "Member"}
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {state === "connected"
+                            ? "Connected"
+                            : state === "incoming"
+                              ? "Wants to connect with you"
+                              : state === "sent"
+                                ? "Request sent"
+                                : "Not connected"}
                         </p>
-                        {isConnected && (
-                          <p className="text-xs text-muted-foreground">
-                            Already connected
-                          </p>
-                        )}
-                        {isPending && (
-                          <p className="text-xs text-muted-foreground">
-                            Request pending
-                          </p>
-                        )}
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <Link
                           to="/messages/$userId"
                           params={{ userId: person.id }}
-                          className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
+                          className={pillClass("text-xs")}
                         >
                           Message
                         </Link>
-                        {!isConnected && !isPending && (
+                        {state === "none" ? (
                           <button
-                            onClick={() => void handleConnect(person.id)}
+                            type="button"
+                            onClick={() =>
+                              run(
+                                person.id,
+                                () =>
+                                  sendConnectionRequest({
+                                    data: { userId: person.id },
+                                  }),
+                                "Connection request sent.",
+                              )
+                            }
                             disabled={busyId === person.id}
-                            className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+                            className={primaryPillClass("text-xs")}
                           >
                             {busyId === person.id ? "…" : "Connect"}
                           </button>
-                        )}
+                        ) : state === "incoming" ? (
+                          <button
+                            type="button"
+                            onClick={() => setTab("requests")}
+                            className={primaryPillClass("text-xs")}
+                          >
+                            Respond
+                          </button>
+                        ) : null}
                       </div>
                     </li>
                   );
                 })}
               </ul>
             </div>
-          )}
-
-          {results === null && (
-            <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-accent">
-                <svg
-                  className="h-6 w-6 text-accent-foreground"
-                  fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}
-                >
-                  <circle cx="11" cy="11" r="8" />
-                  <path d="m21 21-4.35-4.35" />
-                </svg>
-              </div>
-              <h2 className="text-base font-semibold text-foreground">
-                Find people
-              </h2>
-              <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-                Search by name to find others using NewPop and send connection requests.
-              </p>
-            </div>
+          ) : (
+            <EmptyState
+              title="Find people"
+              body="Search by name to find other members and send connection requests."
+            />
           )}
         </section>
-      )}
+      ) : null}
     </div>
   );
 }
 
-/* ── Connection row ──────────────────────────────────────────────── */
 function ConnectionRow({
   connection,
-  busyId,
+  busy,
   onRemove,
 }: {
   connection: Connection;
-  busyId: string | null;
-  onRemove: (id: string) => void;
+  busy: boolean;
+  onRemove: () => void;
 }) {
+  const name = connection.display_name?.trim() || "Member";
   return (
-    <li className="flex items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-        {((connection.display_name?.trim() ?? "M")[0] ?? "M").toUpperCase()}
-      </div>
+    <li className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
+      <Avatar name={name} url={connection.avatar_url} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-foreground">
-          {connection.display_name?.trim() || "Member"}
-        </p>
+        <Link
+          to="/people/$userId"
+          params={{ userId: connection.user_id }}
+          className="text-sm font-semibold text-foreground hover:underline"
+        >
+          {name}
+        </Link>
         <p className="text-xs text-muted-foreground">
-          Connected {new Date(connection.connected_at).toLocaleDateString()}
+          Connected {formatDate(connection.connected_at)}
         </p>
       </div>
       <div className="flex shrink-0 gap-2">
         <Link
           to="/messages/$userId"
           params={{ userId: connection.user_id }}
-          className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
+          className={pillClass("text-xs")}
         >
           Message
         </Link>
-        <button
-          onClick={() => onRemove(connection.connection_id)}
-          disabled={busyId === connection.connection_id}
-          className="rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+        <ConfirmButton
+          title={`Remove ${name}?`}
+          description="You will stop seeing each other's plans. You can send a new request later."
+          confirmLabel="Remove"
+          onConfirm={onRemove}
+          disabled={busy}
+          className={pillClass("text-xs", { danger: true })}
         >
-          {busyId === connection.connection_id ? "…" : "Remove"}
-        </button>
+          {busy ? "…" : "Remove"}
+        </ConfirmButton>
       </div>
     </li>
   );
 }
 
-/* ── Pending request row ─────────────────────────────────────────── */
 function RequestRow({
   request,
-  busyId,
+  busy,
   onRespond,
 }: {
   request: PendingRequest;
-  busyId: string | null;
-  onRespond: (id: string, accept: boolean) => void;
+  busy: boolean;
+  onRespond: (accept: boolean) => void;
 }) {
+  const name = request.display_name?.trim() || "Member";
   return (
     <li className="flex flex-wrap items-center gap-4 rounded-2xl border border-border bg-card px-5 py-4 shadow-sm">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
-        {((request.display_name?.trim() ?? "M")[0] ?? "M").toUpperCase()}
-      </div>
+      <Avatar name={name} url={request.avatar_url} />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-semibold text-foreground">
-          {request.display_name?.trim() || "Member"}
-        </p>
+        <Link
+          to="/people/$userId"
+          params={{ userId: request.requester_id }}
+          className="text-sm font-semibold text-foreground hover:underline"
+        >
+          {name}
+        </Link>
         <p className="text-xs text-muted-foreground">
-          Wants to connect ·{" "}
-          {new Date(request.requested_at).toLocaleDateString()}
+          Wants to connect · {formatDate(request.requested_at)}
         </p>
       </div>
       <div className="flex shrink-0 gap-2">
         <button
-          onClick={() => onRespond(request.connection_id, true)}
-          disabled={busyId === request.connection_id}
-          className="rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          type="button"
+          onClick={() => onRespond(true)}
+          disabled={busy}
+          className={primaryPillClass("text-xs")}
         >
-          {busyId === request.connection_id ? "…" : "Accept"}
+          {busy ? "…" : "Accept"}
         </button>
         <button
-          onClick={() => onRespond(request.connection_id, false)}
-          disabled={busyId === request.connection_id}
-          className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+          type="button"
+          onClick={() => onRespond(false)}
+          disabled={busy}
+          className={pillClass("text-xs", { danger: true })}
         >
           Decline
         </button>
       </div>
     </li>
-  );
-}
-
-/* ── Shared helpers ──────────────────────────────────────────────── */
-function EmptyCard({
-  title,
-  body,
-  action,
-}: {
-  title: string;
-  body: string;
-  action?: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
-      <h2 className="text-base font-semibold text-foreground">{title}</h2>
-      <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">{body}</p>
-      {action && <div className="mt-5">{action}</div>}
-    </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-[6rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
-        accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
-      }`}
-    >
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xl font-semibold leading-none text-foreground">
-        {value}
-      </span>
-    </div>
   );
 }

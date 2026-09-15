@@ -2,6 +2,15 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { EmptyState } from "../../components/EmptyState";
+import {
+  Chip,
+  PageHeader,
+  RouteError,
+  primaryPillClass,
+} from "../../components/PageChrome";
+import { StatChipSkeleton } from "../../components/Skeletons";
+import { StatChip } from "../../components/StatChip";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -13,6 +22,8 @@ import {
   formatAmount,
   toMinorUnits,
 } from "../../lib/donations";
+import { pageHead } from "../../lib/seo";
+import { formatDate } from "../../lib/utils";
 
 const METHODS = [
   { value: "bank_transfer", label: "Bank transfer" },
@@ -29,36 +40,21 @@ const STATUS_STYLES: Record<string, string> = {
 
 export const Route = createFileRoute("/_authed/donate")({
   loader: async () => ({ donations: await fetchMyDonations() }),
-  pendingComponent: DonateSkeleton,
-  errorComponent: () => (
-    <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
-      <h2 className="text-base font-semibold text-foreground">
-        Could not load donations
-      </h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Refresh the page to try again.
-      </p>
-    </div>
-  ),
-  component: DonatePage,
-});
-
-function DonateSkeleton() {
-  return (
-    <div className="flex flex-col gap-8">
+  head: () =>
+    pageHead("Support NewPop", "Donations keep the platform running."),
+  pendingComponent: () => (
+    <div className="flex flex-col gap-8" aria-busy>
       <div className="h-8 w-44 animate-pulse rounded-lg bg-muted" />
-      <div className="flex gap-4">
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="h-16 w-28 animate-pulse rounded-2xl bg-muted" />
-        ))}
-      </div>
+      <StatChipSkeleton count={3} />
       <div className="grid gap-8 lg:grid-cols-2">
         <div className="h-80 animate-pulse rounded-2xl bg-muted" />
         <div className="h-60 animate-pulse rounded-2xl bg-muted" />
       </div>
     </div>
-  );
-}
+  ),
+  errorComponent: () => <RouteError title="Could not load donations" />,
+  component: DonatePage,
+});
 
 function DonatePage() {
   const { donations } = Route.useLoaderData();
@@ -66,76 +62,98 @@ function DonatePage() {
 
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<(typeof CURRENCIES)[number]>("ALL");
-  const [method, setMethod] = useState<(typeof METHODS)[number]["value"]>("bank_transfer");
+  const [method, setMethod] =
+    useState<(typeof METHODS)[number]["value"]>("bank_transfer");
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const totalConfirmed = donations
-    .filter((d) => d.status === "confirmed")
-    .reduce((s, d) => s + d.amount_minor, 0);
+  // Totals are per currency — summing ALL + EUR minor units together was
+  // meaningless and formatted with whatever the form currently selected.
+  const confirmedByCurrency = new Map<string, number>();
+  for (const d of donations) {
+    if (d.status !== "confirmed") continue;
+    confirmedByCurrency.set(
+      d.currency,
+      (confirmedByCurrency.get(d.currency) ?? 0) + d.amount_minor,
+    );
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const amountMinor = toMinorUnits(amount);
-    if (amountMinor === null) { toast.error("Enter an amount like 12.50."); return; }
+    if (amountMinor === null) {
+      toast.error("Enter an amount like 12.50.");
+      return;
+    }
     setBusy(true);
-    const result = await declareDonation({
-      data: {
-        amountMinor,
-        currency,
-        method,
-        ...(message.trim() ? { message: message.trim() } : {}),
-      },
-    });
-    setBusy(false);
-    if (!result.ok) { toast.error(result.error); return; }
-    setAmount("");
-    setMessage("");
-    toast.success("Thank you — your donation is recorded as pending.");
-    await router.invalidate();
+    try {
+      const result = await declareDonation({
+        data: {
+          amountMinor,
+          currency,
+          method,
+          ...(message.trim() ? { message: message.trim() } : {}),
+        },
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setAmount("");
+      setMessage("");
+      toast.success("Thank you — your donation is recorded as pending.");
+      await router.invalidate();
+    } catch {
+      toast.error("Could not reach the server.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="flex flex-col gap-8">
+      <PageHeader
+        title="Support NewPop"
+        subtitle="Donations keep the platform running. Record your donation and we'll confirm it once the transfer arrives."
+      />
 
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">Support NewPop</h1>
-        <p className="text-sm text-muted-foreground">
-          Donations keep the platform running. Record your donation and we'll confirm it once the transfer arrives.
-        </p>
-      </div>
-
-      {/* ── Stats strip ─────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-4">
-        <StatChip label="Total donations" value={String(donations.length)} />
-        <StatChip label="Confirmed" value={String(donations.filter(d => d.status === "confirmed").length)} accent />
-        <StatChip label="Pending" value={String(donations.filter(d => d.status === "pending").length)} />
-        {totalConfirmed > 0 && (
-          <StatChip label="Total confirmed" value={formatAmount(totalConfirmed, currency)} />
-        )}
+        <StatChip label="Recorded" value={String(donations.length)} />
+        <StatChip
+          label="Pending"
+          value={String(donations.filter((d) => d.status === "pending").length)}
+        />
+        {[...confirmedByCurrency.entries()].map(([code, minor]) => (
+          <StatChip
+            key={code}
+            label={`Confirmed (${code})`}
+            value={formatAmount(minor, code)}
+            accent
+          />
+        ))}
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_1fr]">
-
-        {/* ── Donation form ────────────────────────────────────── */}
+      <div className="grid gap-8 lg:grid-cols-2">
         <form
           onSubmit={handleSubmit}
           className="flex h-fit flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-sm"
         >
-          <h2 className="text-base font-semibold text-foreground">Record a donation</h2>
+          <h2 className="text-base font-semibold text-foreground">
+            Record a donation
+          </h2>
 
           <Alert>
             <AlertDescription>
-              This records your intent — it does not take payment. Nothing is charged.
-              An admin marks it confirmed once the money arrives.
+              This records your intent — it does not take payment and nothing is
+              charged. An admin marks it confirmed once the money arrives.
             </AlertDescription>
           </Alert>
 
-          {/* Amount + currency */}
           <div className="flex gap-3">
             <div className="flex flex-1 flex-col gap-1.5">
-              <Label htmlFor="amount" className="text-xs font-medium">Amount</Label>
+              <Label htmlFor="amount" className="text-xs font-medium">
+                Amount
+              </Label>
               <Input
                 id="amount"
                 inputMode="decimal"
@@ -147,45 +165,50 @@ function DonatePage() {
               />
             </div>
             <div className="flex w-28 flex-col gap-1.5">
-              <Label htmlFor="currency" className="text-xs font-medium">Currency</Label>
+              <Label htmlFor="currency" className="text-xs font-medium">
+                Currency
+              </Label>
               <select
                 id="currency"
                 value={currency}
-                onChange={(e) => setCurrency(e.target.value as (typeof CURRENCIES)[number])}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                onChange={(e) =>
+                  setCurrency(e.target.value as (typeof CURRENCIES)[number])
+                }
+                className="h-10 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 {CURRENCIES.map((code) => (
-                  <option key={code} value={code}>{code}</option>
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Payment method — pill selector */}
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs font-medium">Payment method</Label>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="text-xs font-medium text-foreground">
+              Payment method
+            </legend>
             <div className="flex flex-wrap gap-2">
               {METHODS.map((m) => (
-                <button
+                <Chip
                   key={m.value}
-                  type="button"
+                  active={method === m.value}
                   onClick={() => setMethod(m.value)}
-                  className={`rounded-full px-4 py-1.5 text-sm font-medium transition-all ${
-                    method === m.value
-                      ? "bg-primary text-primary-foreground"
-                      : "border border-border bg-card text-muted-foreground hover:border-foreground/20 hover:text-foreground"
-                  }`}
+                  className="px-4 py-1.5 text-sm"
                 >
                   {m.label}
-                </button>
+                </Chip>
               ))}
             </div>
-          </div>
+          </fieldset>
 
-          {/* Message */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="message" className="text-xs font-medium">
-              Message <span className="text-muted-foreground">(optional)</span>
+              Message{" "}
+              <span className="font-normal text-muted-foreground">
+                (optional)
+              </span>
             </Label>
             <Textarea
               id="message"
@@ -200,19 +223,21 @@ function DonatePage() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+            className={primaryPillClass("w-full py-2.5")}
           >
             {busy ? "Recording…" : "Record donation"}
           </button>
         </form>
 
-        {/* ── Donation history ─────────────────────────────────── */}
         <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold text-foreground">Your donations</h2>
+          <h2 className="text-base font-semibold text-foreground">
+            Your donations
+          </h2>
           {donations.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border px-6 py-14 text-center">
-              <p className="text-sm text-muted-foreground">Nothing recorded yet.</p>
-            </div>
+            <EmptyState
+              title="Nothing recorded yet"
+              body="Donations you record will be listed here with their status."
+            />
           ) : (
             <ul className="flex flex-col gap-3">
               {donations.map((donation) => (
@@ -228,14 +253,12 @@ function DonatePage() {
                       </span>
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {new Date(donation.created_at).toLocaleDateString()}
+                      {formatDate(donation.created_at)}
                       {donation.message ? ` · ${donation.message}` : ""}
                     </p>
                   </div>
                   <span
-                    className={`shrink-0 rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${
-                      STATUS_STYLES[donation.status] ?? "bg-muted text-muted-foreground"
-                    }`}
+                    className={`shrink-0 rounded-full px-3 py-0.5 text-[11px] font-semibold capitalize ${STATUS_STYLES[donation.status] ?? "bg-muted text-muted-foreground"}`}
                   >
                     {donation.status}
                   </span>
@@ -245,27 +268,6 @@ function DonatePage() {
           )}
         </section>
       </div>
-    </div>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-[7rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
-        accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
-      }`}
-    >
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xl font-semibold leading-none text-foreground">{value}</span>
     </div>
   );
 }

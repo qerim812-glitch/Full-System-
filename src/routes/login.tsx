@@ -7,8 +7,11 @@ import {
 import { useState } from "react";
 import { z } from "zod";
 
+import { AuthLayout } from "../components/AuthLayout";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { fetchAuthUser, signIn } from "../lib/auth";
+import { pageHead } from "../lib/seo";
+import { safeRedirect } from "../lib/utils";
 
 const searchSchema = z.object({
   redirect: z.string().optional().catch(undefined),
@@ -16,9 +19,10 @@ const searchSchema = z.object({
 
 export const Route = createFileRoute("/login")({
   validateSearch: searchSchema,
+  head: () => pageHead("Sign in", "Sign in to book a table across Tirana."),
   beforeLoad: async ({ search }) => {
     const user = await fetchAuthUser();
-    if (user) throw redirect({ to: search.redirect ?? "/venues" });
+    if (user) throw redirect({ to: safeRedirect(search.redirect) });
   },
   component: LoginPage,
 });
@@ -37,18 +41,26 @@ function LoginPage() {
     setError(null);
     try {
       const result = await signIn({ data: { email, password } });
-      if (!result.ok) { setError(result.error); return; }
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       await router.invalidate();
-      await router.navigate({ to: search.redirect ?? "/venues" });
+      await router.navigate({ to: safeRedirect(search.redirect) });
     } catch {
-      setError("Could not reach the server. Check your connection and try again.");
+      setError(
+        "Could not reach the server. Check your connection and try again.",
+      );
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <AuthLayout title="Welcome back" subtitle="Sign in to book a table across Tirana.">
+    <AuthLayout
+      title="Welcome back"
+      subtitle="Sign in to book a table across Tirana."
+    >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && (
           <Alert variant="destructive">
@@ -57,7 +69,10 @@ function LoginPage() {
         )}
 
         <div className="flex flex-col gap-1.5">
-          <label htmlFor="email" className="text-xs font-medium text-muted-foreground">
+          <label
+            htmlFor="email"
+            className="text-xs font-medium text-muted-foreground"
+          >
             Email
           </label>
           <input
@@ -75,7 +90,10 @@ function LoginPage() {
 
         <div className="flex flex-col gap-1.5">
           <div className="flex items-baseline justify-between">
-            <label htmlFor="password" className="text-xs font-medium text-muted-foreground">
+            <label
+              htmlFor="password"
+              className="text-xs font-medium text-muted-foreground"
+            >
               Password
             </label>
             <Link
@@ -116,39 +134,5 @@ function LoginPage() {
         </Link>
       </p>
     </AuthLayout>
-  );
-}
-
-/** Shared shell for the signed-out screens. */
-export function AuthLayout({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
-      <div className="w-full max-w-sm">
-        {/* Brand pill */}
-        <div className="mb-8 flex flex-col items-center gap-4">
-          <div className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground">
-            NewPop · Tirana
-          </div>
-          <div className="text-center">
-            <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-              {title}
-            </h1>
-            <p className="mt-2 text-sm text-muted-foreground">{subtitle}</p>
-          </div>
-        </div>
-        {/* Floating card */}
-        <div className="rounded-2xl border border-border bg-card p-7 shadow-sm">
-          {children}
-        </div>
-      </div>
-    </main>
   );
 }

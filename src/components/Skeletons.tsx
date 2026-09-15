@@ -6,9 +6,7 @@
 import { cn } from "../lib/utils";
 
 function Pulse({ className }: { className?: string }) {
-  return (
-    <div className={cn("animate-pulse rounded-md bg-muted", className)} />
-  );
+  return <div className={cn("animate-pulse rounded-md bg-muted", className)} />;
 }
 
 /* ── Venue card skeleton ─────────────────────────────────────────── */
@@ -92,7 +90,10 @@ export function StatChipSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="flex flex-wrap gap-4">
       {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="flex min-w-[7rem] flex-col gap-2 rounded-2xl border border-border bg-card px-5 py-3">
+        <div
+          key={i}
+          className="flex min-w-[7rem] flex-col gap-2 rounded-2xl border border-border bg-card px-5 py-3"
+        >
           <Pulse className="h-2.5 w-16" />
           <Pulse className="h-5 w-10" />
         </div>

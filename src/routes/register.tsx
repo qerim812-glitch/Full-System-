@@ -6,11 +6,13 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 
+import { AuthLayout } from "../components/AuthLayout";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { fetchAuthUser, signUp } from "../lib/auth";
-import { AuthLayout } from "./login";
+import { pageHead } from "../lib/seo";
 
 export const Route = createFileRoute("/register")({
+  head: () => pageHead("Create account", "Join NewPop — for ages 18 and over."),
   beforeLoad: async () => {
     const user = await fetchAuthUser();
     if (user) throw redirect({ to: "/venues" });
@@ -35,7 +37,14 @@ function passwordStrength(pw: string): { score: number; label: string } {
   return { score, label: labels[score] ?? "Weak" };
 }
 
-const strengthColors = ["bg-destructive", "bg-destructive", "bg-orange-400", "bg-yellow-400", "bg-green-500", "bg-green-600"];
+const strengthColors = [
+  "bg-destructive",
+  "bg-destructive",
+  "bg-orange-400",
+  "bg-yellow-400",
+  "bg-green-500",
+  "bg-green-600",
+];
 
 function RegisterPage() {
   const router = useRouter();
@@ -53,15 +62,28 @@ function RegisterPage() {
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    if (password !== confirm) { setError("The two passwords do not match"); return; }
+    if (password !== confirm) {
+      setError("The two passwords do not match");
+      return;
+    }
     setBusy(true);
     try {
       const result = await signUp({
-        data: { email, password, dateOfBirth, displayName: displayName.trim() || undefined },
+        data: {
+          email,
+          password,
+          dateOfBirth,
+          displayName: displayName.trim() || undefined,
+        },
       });
-      if (!result.ok) { setError(result.error); return; }
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
       if (result.needsConfirmation) {
-        setNotice("Check your email to confirm your address, then sign in. The link expires in an hour.");
+        setNotice(
+          "Check your email to confirm your address, then sign in. The link expires in an hour.",
+        );
         return;
       }
       await router.invalidate();
@@ -80,7 +102,10 @@ function RegisterPage() {
 
   if (notice) {
     return (
-      <AuthLayout title="Almost there" subtitle="One more step to finish signing up.">
+      <AuthLayout
+        title="Almost there"
+        subtitle="One more step to finish signing up."
+      >
         <Alert>
           <AlertDescription>{notice}</AlertDescription>
         </Alert>
@@ -95,7 +120,10 @@ function RegisterPage() {
   }
 
   return (
-    <AuthLayout title="Create your account" subtitle="NewPop is for ages 18 and over.">
+    <AuthLayout
+      title="Create your account"
+      subtitle="NewPop is for ages 18 and over."
+    >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && (
           <Alert variant="destructive">
@@ -127,7 +155,11 @@ function RegisterPage() {
           />
         </Field>
 
-        <Field label="Date of birth" htmlFor="dateOfBirth" hint="Used to check venue age limits.">
+        <Field
+          label="Date of birth"
+          htmlFor="dateOfBirth"
+          hint="Used to check venue age limits."
+        >
           <input
             id="dateOfBirth"
             type="date"
@@ -157,10 +189,14 @@ function RegisterPage() {
                   style={{ width: `${(strength.score / 5) * 100}%` }}
                 />
               </div>
-              <span className="text-xs text-muted-foreground">{strength.label}</span>
+              <span className="text-xs text-muted-foreground">
+                {strength.label}
+              </span>
             </div>
           ) : (
-            <p className="mt-1 text-xs text-muted-foreground">At least 8 characters.</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              At least 8 characters.
+            </p>
           )}
         </Field>
 
@@ -187,7 +223,10 @@ function RegisterPage() {
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link to="/login" className="font-medium text-foreground underline-offset-4 hover:underline">
+        <Link
+          to="/login"
+          className="font-medium text-foreground underline-offset-4 hover:underline"
+        >
           Sign in
         </Link>
       </p>
@@ -211,7 +250,10 @@ function Field({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <label htmlFor={htmlFor} className="text-xs font-medium text-muted-foreground">
+      <label
+        htmlFor={htmlFor}
+        className="text-xs font-medium text-muted-foreground"
+      >
         {label}
       </label>
       {children}

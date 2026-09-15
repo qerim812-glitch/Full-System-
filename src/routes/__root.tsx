@@ -10,6 +10,7 @@ import {
 import { type ReactNode } from "react";
 
 import { Toaster } from "../components/ui/sonner";
+import { THEME_INIT_SCRIPT } from "../hooks/use-theme";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -91,6 +92,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         },
         { property: "og:type", content: "website" },
         { name: "twitter:card", content: "summary_large_image" },
+        { name: "theme-color", content: "#232633" },
       ],
       links: [
         {
@@ -98,7 +100,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
           href: appCss,
         },
         { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
+        { rel: "manifest", href: "/manifest.webmanifest" },
+        { rel: "apple-touch-icon", href: "/icons/apple-touch-icon.png" },
       ],
+      // Runs before hydration so the saved theme applies with no flash.
+      scripts: [{ children: THEME_INIT_SCRIPT }],
     }),
     shellComponent: RootShell,
     component: RootComponent,
@@ -109,7 +115,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>

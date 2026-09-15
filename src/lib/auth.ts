@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestUrl } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import {
@@ -21,6 +22,17 @@ const emailSchema = z
   .toLowerCase()
   .email("Enter a valid email address")
   .max(254, "That email address is too long");
+
+/**
+ * Absolute origin of the current request, for Supabase's redirect URLs.
+ * Derived per request rather than hardcoded so preview deployments and
+ * local dev both get links back to themselves. Must also be allow-listed in
+ * Supabase → Authentication → URL Configuration.
+ */
+function siteOrigin(): string {
+  const url = getRequestUrl({ xForwardedHost: true, xForwardedProto: true });
+  return url.origin;
+}
 
 const signInSchema = z.object({
   email: emailSchema,
@@ -122,6 +134,7 @@ export const signUp = createServerFn({ method: "POST" })
       email: data.email,
       password: data.password,
       options: {
+        emailRedirectTo: `${siteOrigin()}/auth/callback`,
         data: {
           date_of_birth: data.dateOfBirth,
           display_name: data.displayName ?? null,
@@ -133,9 +146,13 @@ export const signUp = createServerFn({ method: "POST" })
       const message = error.message ?? "";
 
       if (/already registered|already exists|User already/i.test(message)) {
+        // Same shape as a successful sign-up so the response does not reveal
+        // which addresses are registered. The real owner gets a notice email
+        // from Supabase; a stranger learns nothing.
         return {
-          ok: false as const,
-          error: "An account with this email already exists",
+          ok: true as const,
+          needsConfirmation: true,
+          user: { id: "", email: data.email, isAdmin: false },
         };
       }
       // Supabase reports a failing profile trigger as an opaque "Database
@@ -190,11 +207,103 @@ export const requestPasswordReset = createServerFn({ method: "POST" })
   .validator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
-    await supabase.auth.resetPasswordForEmail(data.email);
+    // The link lands on /auth/callback, which exchanges the code for a
+    // session and forwards to /reset-password to pick a new password.
+    await supabase.auth.resetPasswordForEmail(data.email, {
+      redirectTo: `${siteOrigin()}/auth/callback?next=/reset-password`,
+    });
     // Always the same response, whether or not the address exists. Reporting
     // "no such account" turns this endpoint into a list of your users.
     return {
       ok: true as const,
       message: "If that email has an account, a reset link is on its way.",
     };
+  });
+
+const codeSchema = z.object({ code: z.string().min(1).max(512) });
+
+/**
+ * Completes a PKCE email link (confirmation or recovery). @supabase/ssr
+ * stored the code verifier in a cookie when the email was requested, so the
+ * exchange has to happen through the same cookie-bound server client.
+ */
+export const exchangeAuthCode = createServerFn({ method: "POST" })
+  .validator((data: unknown) => codeSchema.parse(data))
+  .handler(async ({ data }) => {
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.auth.exchangeCodeForSession(data.code);
+    if (error) {
+      console.error("[auth] code exchange failed:", error.message);
+      return {
+        ok: false as const,
+        error: "That link is invalid or has expired. Request a new one.",
+      };
+    }
+    return { ok: true as const };
+  });
+
+const newPasswordSchema = z.object({ password: passwordSchema });
+
+/** Set a new password after a recovery link (session already established). */
+export const updatePassword = createServerFn({ method: "POST" })
+  .validator((data: unknown) => newPasswordSchema.parse(data))
+  .handler(async ({ data }) => {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const, error: "You are not signed in." };
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase.auth.updateUser({
+      password: data.password,
+    });
+    if (error) {
+      if (/same as|different from the old/i.test(error.message)) {
+        return {
+          ok: false as const,
+          error: "Choose a password you have not used before.",
+        };
+      }
+      console.error("[auth] updatePassword failed:", error.message);
+      return { ok: false as const, error: "Could not update the password." };
+    }
+    return { ok: true as const };
+  });
+
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password"),
+  newPassword: passwordSchema,
+});
+
+/**
+ * Change password from the account page. Runs entirely server-side: the
+ * browser client cannot see the httpOnly session cookie, so the previous
+ * client-side re-authentication always failed with "not signed in".
+ */
+export const changePassword = createServerFn({ method: "POST" })
+  .validator((data: unknown) => changePasswordSchema.parse(data))
+  .handler(async ({ data }) => {
+    const user = await getCurrentUser();
+    if (!user?.email) {
+      return { ok: false as const, error: "You are not signed in." };
+    }
+    const supabase = getSupabaseServerClient();
+    const { error: verifyError } = await supabase.auth.signInWithPassword({
+      email: user.email,
+      password: data.currentPassword,
+    });
+    if (verifyError) {
+      return { ok: false as const, error: "Current password is incorrect." };
+    }
+    const { error } = await supabase.auth.updateUser({
+      password: data.newPassword,
+    });
+    if (error) {
+      if (/same as|different from the old/i.test(error.message)) {
+        return {
+          ok: false as const,
+          error: "The new password must differ from the current one.",
+        };
+      }
+      console.error("[auth] changePassword failed:", error.message);
+      return { ok: false as const, error: "Could not change the password." };
+    }
+    return { ok: true as const };
   });

@@ -10,7 +10,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { loadProfiles } from "./people";
 import { getCurrentUser, getSupabaseServerClient } from "./supabase/server";
+import { todayInTirana } from "./utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,11 +43,11 @@ export type PresenceEntry = {
 };
 
 export type ConnectionStatus =
-  | "none"          // no relationship
-  | "pending_sent"  // caller sent a request, not yet accepted
-  | "pending_recv"  // caller received a request
-  | "accepted"      // mutual connection
-  | "declined";     // request was declined
+  | "none" // no relationship
+  | "pending_sent" // caller sent a request, not yet accepted
+  | "pending_recv" // caller received a request
+  | "accepted" // mutual connection
+  | "declined"; // request was declined
 
 // ---------------------------------------------------------------------------
 // Connections
@@ -70,7 +72,10 @@ export const fetchPendingRequests = createServerFn({ method: "GET" }).handler(
     const supabase = getSupabaseServerClient();
     const { data, error } = await supabase.rpc("pending_connection_requests");
     if (error) {
-      console.error("[social] pending_connection_requests failed:", error.message);
+      console.error(
+        "[social] pending_connection_requests failed:",
+        error.message,
+      );
       return [];
     }
     return (data ?? []) as PendingRequest[];
@@ -92,7 +97,7 @@ export const fetchConnectionStatus = createServerFn({ method: "GET" })
       .select("requester_id, status")
       .or(
         `and(requester_id.eq.${user.id},addressee_id.eq.${data.userId}),` +
-        `and(requester_id.eq.${data.userId},addressee_id.eq.${user.id})`,
+          `and(requester_id.eq.${data.userId},addressee_id.eq.${user.id})`,
       )
       .maybeSingle();
 
@@ -104,6 +109,55 @@ export const fetchConnectionStatus = createServerFn({ method: "GET" })
     return row.requester_id === user.id ? "pending_sent" : "pending_recv";
   });
 
+export type SentRequest = {
+  connection_id: string;
+  addressee_id: string;
+  display_name: string | null;
+  avatar_url: string | null;
+  requested_at: string;
+};
+
+/**
+ * Requests I have sent that are still pending. The People page used to know
+ * only about incoming requests, so "Connect" stayed clickable after sending.
+ */
+export const fetchSentRequests = createServerFn({ method: "GET" }).handler(
+  async (): Promise<SentRequest[]> => {
+    const supabase = getSupabaseServerClient();
+    const user = await getCurrentUser();
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from("connections")
+      .select("id, addressee_id, created_at")
+      .eq("requester_id", user.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("[social] fetchSentRequests failed:", error.message);
+      return [];
+    }
+    const rows = (data ?? []) as Array<{
+      id: string;
+      addressee_id: string;
+      created_at: string;
+    }>;
+    const profiles = await loadProfiles(
+      supabase,
+      rows.map((r) => r.addressee_id),
+    );
+    return rows.map((r) => {
+      const p = profiles.get(r.addressee_id);
+      return {
+        connection_id: r.id,
+        addressee_id: r.addressee_id,
+        display_name: p?.display_name ?? null,
+        avatar_url: p?.avatar_url ?? null,
+        requested_at: r.created_at,
+      };
+    });
+  },
+);
+
 /** Send a connection request. */
 export const sendConnectionRequest = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -114,14 +168,40 @@ export const sendConnectionRequest = createServerFn({ method: "POST" })
     const user = await getCurrentUser();
     if (!user) return { ok: false as const, error: "Please sign in again." };
 
+    if (data.userId === user.id) {
+      return { ok: false as const, error: "You cannot connect with yourself." };
+    }
+
+    // A declined request would otherwise block re-requesting forever (the
+    // pair is unique). Clear our own earlier declined row first.
+    await supabase
+      .from("connections")
+      .delete()
+      .eq("requester_id", user.id)
+      .eq("addressee_id", data.userId)
+      .eq("status", "declined");
+
     const { error } = await supabase.from("connections").insert({
       requester_id: user.id,
       addressee_id: data.userId,
     });
 
     if (error) {
-      if (/duplicate key|connections_unique_pair/i.test(error.message)) {
-        return { ok: false as const, error: "Request already sent." };
+      if (
+        /duplicate key|connections_unique_pair|connections_unordered_pair/i.test(
+          error.message,
+        )
+      ) {
+        return {
+          ok: false as const,
+          error: "You are already connected or a request is pending.",
+        };
+      }
+      if (/too often|rate_limited/i.test(error.message)) {
+        return {
+          ok: false as const,
+          error: "You are sending requests too quickly. Try again later.",
+        };
       }
       if (/row-level security/i.test(error.message)) {
         return {
@@ -184,9 +264,40 @@ export const removeConnection = createServerFn({ method: "POST" })
 
 const checkinSchema = z.object({
   venueSlug: z.string().min(1).max(120),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine((d) => d >= todayInTirana(), "Pick today or a future date"),
   note: z.string().max(280).optional(),
 });
+
+/** My own check-in for one venue + date (seeds the "I'm going" panel). */
+export const fetchMyCheckin = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        venueSlug: z.string().min(1).max(120),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<{ note: string | null } | null> => {
+    const supabase = getSupabaseServerClient();
+    const user = await getCurrentUser();
+    if (!user) return null;
+    const { data: row, error } = await supabase
+      .from("presence_checkins")
+      .select("note")
+      .eq("user_id", user.id)
+      .eq("venue_slug", data.venueSlug)
+      .eq("checkin_date", data.date)
+      .maybeSingle();
+    if (error) {
+      console.error("[social] fetchMyCheckin failed:", error.message);
+      return null;
+    }
+    return (row as { note: string | null } | null) ?? null;
+  });
 
 /** Announce you're going to a venue on a date. */
 export const checkInToVenue = createServerFn({ method: "POST" })
@@ -242,14 +353,24 @@ export const checkOutFromVenue = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export type MyCheckin = {
+  id: string;
+  venue_slug: string;
+  checkin_date: string;
+  note: string | null;
+  venues: { name: string; image_url: string | null } | null;
+};
+
 /** My own check-ins (upcoming + today). */
 export const fetchMyCheckins = createServerFn({ method: "GET" }).handler(
-  async () => {
+  async (): Promise<MyCheckin[]> => {
     const supabase = getSupabaseServerClient();
     const user = await getCurrentUser();
     if (!user) return [];
 
-    const today = new Date().toISOString().slice(0, 10);
+    // checkin_date is a Tirana wall-clock date; a UTC date is off by a day
+    // for an hour or two around local midnight.
+    const today = todayInTirana();
     const { data, error } = await supabase
       .from("presence_checkins")
       .select("id, venue_slug, checkin_date, note, venues(name, image_url)")
@@ -261,7 +382,7 @@ export const fetchMyCheckins = createServerFn({ method: "GET" }).handler(
       console.error("[social] fetchMyCheckins failed:", error.message);
       return [];
     }
-    return data ?? [];
+    return (data ?? []) as unknown as MyCheckin[];
   },
 );
 
@@ -303,8 +424,19 @@ export const fixMissingProfile = createServerFn({ method: "POST" }).handler(
     const { data, error } = await supabase.rpc("fix_missing_profile");
     if (error) {
       console.error("[social] fix_missing_profile failed:", error.message);
-      return { ok: false as const, error: error.message };
+      return {
+        ok: false as const,
+        error: "Could not repair your profile. Please contact support.",
+      };
     }
-    return { ok: true as const, result: data as string };
+    const result = data as string;
+    if (result === "error:missing_dob") {
+      return {
+        ok: false as const,
+        error:
+          "Your account has no date of birth on record, so a profile cannot be created automatically. Please register again or contact support.",
+      };
+    }
+    return { ok: true as const, result };
   },
 );

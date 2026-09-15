@@ -28,7 +28,9 @@ export function FavoriteButton({
     setFavorited(next);
     setPending(true);
     try {
-      const result = await setFavorite({ data: { venueSlug, favorited: next } });
+      const result = await setFavorite({
+        data: { venueSlug, favorited: next },
+      });
       if (!result.ok) {
         setFavorited(!next);
         toast.error(result.error);

@@ -1,36 +1,54 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { CalendarPlus } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 
+import { ConfirmButton } from "../../components/ConfirmButton";
+import { EmptyState } from "../../components/EmptyState";
+import {
+  PageHeader,
+  RouteError,
+  pillClass,
+  primaryPillClass,
+} from "../../components/PageChrome";
 import {
   BookingRowSkeletonList,
   StatChipSkeleton,
 } from "../../components/Skeletons";
+import { StatChip } from "../../components/StatChip";
+import { SlotPicker } from "../../components/venue/SlotPicker";
 import {
   cancelBooking,
-  createBooking,
   fetchMyBookings,
+  rescheduleBooking,
   type Booking,
 } from "../../lib/bookings";
-import { todayInTirana } from "../../lib/utils";
-import { EmptyState } from "./venues";
-
-const TIME_SLOTS = ["18:00", "19:00", "20:00", "21:00", "22:00", "23:00"] as const;
+import { buildIcs, downloadIcs } from "../../lib/ics";
+import { pageHead } from "../../lib/seo";
+import { isSlotPast, venueSlots } from "../../lib/slots";
+import {
+  formatBookingDate,
+  formatSlot,
+  nowMinutesInTirana,
+  todayInTirana,
+} from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/bookings")({
   loader: async () => ({ bookings: await fetchMyBookings() }),
+  head: () => pageHead("My bookings"),
   pendingComponent: BookingsSkeleton,
   component: BookingsPage,
   errorComponent: () => (
-    <EmptyState
+    <RouteError
       title="Could not load your bookings"
-      body="If the database migrations have not been applied yet, run supabase/migrations in order and refresh."
+      body="Please refresh the page to try again."
     />
   ),
 });
 
 function BookingsSkeleton() {
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-8" aria-busy>
       <div className="h-8 w-40 animate-pulse rounded-lg bg-muted" />
       <StatChipSkeleton count={4} />
       <BookingRowSkeletonList count={3} />
@@ -40,53 +58,52 @@ function BookingsSkeleton() {
 
 function BookingsPage() {
   const { bookings } = Route.useLoaderData();
+  const today = todayInTirana();
+  const nowMin = nowMinutesInTirana();
 
-  const upcoming = bookings.filter(
-    (b) => b.status === "confirmed" && b.booking_date >= todayInTirana(),
-  );
-  const past = bookings.filter((b) => !upcoming.includes(b));
-  const cancelled = bookings.filter((b) => b.status === "cancelled");
+  const upcoming = bookings
+    .filter(
+      (b) =>
+        b.status === "confirmed" &&
+        !isSlotPast(b.booking_date, formatSlot(b.booking_time), today, nowMin),
+    )
+    .sort(
+      (a, b) =>
+        a.booking_date.localeCompare(b.booking_date) ||
+        a.booking_time.localeCompare(b.booking_time),
+    );
+  const upcomingIds = new Set(upcoming.map((b) => b.id));
+  const past = bookings.filter((b) => !upcomingIds.has(b.id));
+  const completed = bookings.filter((b) => b.status === "completed").length;
+  const cancelled = bookings.filter((b) => b.status === "cancelled").length;
 
   return (
     <div className="flex flex-col gap-8">
-      {/* ── Header ──────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-1">
-        <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-          My Bookings
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Your reservations follow you across all devices.
-        </p>
-      </div>
+      <PageHeader
+        title="My bookings"
+        subtitle="Your reservations follow you across all devices."
+      />
 
-      {/* ── Stats strip ─────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-4">
         <StatChip label="Total" value={String(bookings.length)} />
         <StatChip label="Upcoming" value={String(upcoming.length)} accent />
-        <StatChip
-          label="Completed"
-          value={String(past.filter((b) => b.status === "completed").length)}
-        />
-        <StatChip label="Cancelled" value={String(cancelled.length)} />
+        <StatChip label="Completed" value={String(completed)} />
+        <StatChip label="Cancelled" value={String(cancelled)} />
       </div>
 
-      {/* ── Content ─────────────────────────────────────────────── */}
       {bookings.length === 0 ? (
         <EmptyState
           title="No bookings yet"
           body="Pick a venue and choose a time to make your first reservation."
           action={
-            <Link
-              to="/venues"
-              className="rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            >
+            <Link to="/venues" className={primaryPillClass()}>
               Browse venues
             </Link>
           }
         />
       ) : (
         <>
-          <Section title="Upcoming" bookings={upcoming} cancellable reschedulable />
+          <Section title="Upcoming" bookings={upcoming} editable />
           <Section title="Past & cancelled" bookings={past} />
         </>
       )}
@@ -97,16 +114,13 @@ function BookingsPage() {
 function Section({
   title,
   bookings,
-  cancellable = false,
-  reschedulable = false,
+  editable = false,
 }: {
   title: string;
   bookings: Booking[];
-  cancellable?: boolean;
-  reschedulable?: boolean;
+  editable?: boolean;
 }) {
   if (bookings.length === 0) return null;
-
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -114,12 +128,7 @@ function Section({
       </h2>
       <ul className="flex flex-col gap-3">
         {bookings.map((booking) => (
-          <BookingRow
-            key={booking.id}
-            booking={booking}
-            cancellable={cancellable}
-            reschedulable={reschedulable}
-          />
+          <BookingRow key={booking.id} booking={booking} editable={editable} />
         ))}
       </ul>
     </section>
@@ -128,84 +137,99 @@ function Section({
 
 function BookingRow({
   booking,
-  cancellable,
-  reschedulable,
+  editable,
 }: {
   booking: Booking;
-  cancellable: boolean;
-  reschedulable: boolean;
+  editable: boolean;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [rescheduling, setRescheduling] = useState(false);
   const [newDate, setNewDate] = useState(booking.booking_date);
-  const [newTime, setNewTime] = useState(
-    booking.booking_time.slice(0, 5) as (typeof TIME_SLOTS)[number],
+  const [newTime, setNewTime] = useState<string | null>(
+    formatSlot(booking.booking_time),
   );
-  const [rescheduleError, setRescheduleError] = useState<string | null>(null);
-  const [rescheduleSuccess, setRescheduleSuccess] = useState<string | null>(
-    null,
-  );
+  const [error, setError] = useState<string | null>(null);
+
+  const venueName = booking.venues?.name ?? booking.venue_slug;
+  const imageUrl = booking.venues?.image_url ?? null;
+  const hours = {
+    opens_at: booking.venues?.opens_at ?? "18:00",
+    closes_at: booking.venues?.closes_at ?? "23:00",
+    slot_minutes: booking.venues?.slot_minutes ?? 60,
+  };
+  const slots = venueSlots(hours);
 
   async function handleCancel() {
     setBusy(true);
     setError(null);
-    const result = await cancelBooking({ data: { id: booking.id } });
-    if (!result.ok) {
-      setError(result.error);
+    try {
+      const result = await cancelBooking({ data: { id: booking.id } });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success("Booking cancelled.");
+      await router.invalidate();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
       setBusy(false);
-      return;
     }
-    await router.invalidate();
-    setBusy(false);
   }
 
   async function handleReschedule(e: React.FormEvent) {
     e.preventDefault();
+    if (!newTime) return;
     setBusy(true);
-    setRescheduleError(null);
-    setRescheduleSuccess(null);
-
-    // Cancel old booking then create a new one with the same details
-    const cancelResult = await cancelBooking({ data: { id: booking.id } });
-    if (!cancelResult.ok) {
-      setRescheduleError(cancelResult.error);
-      setBusy(false);
-      return;
-    }
-
-    const createResult = await createBooking({
-      data: {
-        venueSlug: booking.venue_slug,
-        bookingDate: newDate,
-        bookingTime: newTime,
-        partySize: booking.party_size,
-        locationId: booking.location_id ?? null,
-      },
-    });
-
-    if (!createResult.ok) {
-      setRescheduleError(createResult.error);
-      setBusy(false);
-      // Re-invalidate so the original cancelled booking is reflected
+    setError(null);
+    try {
+      const result = await rescheduleBooking({
+        data: { id: booking.id, bookingDate: newDate, bookingTime: newTime },
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      toast.success(
+        `Moved to ${formatBookingDate(newDate)} at ${newTime}. Your code stays ${booking.confirmation_code}.`,
+      );
+      setRescheduling(false);
       await router.invalidate();
-      return;
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy(false);
     }
-
-    setRescheduleSuccess(`Rescheduled to ${newDate} at ${newTime}.`);
-    setRescheduling(false);
-    await router.invalidate();
-    setBusy(false);
   }
 
-  const venueName = booking.venues?.name ?? booking.venue_slug;
-  const imageUrl = booking.venues?.image_url ?? null;
+  function addToCalendar() {
+    downloadIcs(
+      `newpop-${booking.venue_slug}-${booking.booking_date}`,
+      buildIcs({
+        uid: booking.id,
+        title: `Table at ${venueName}`,
+        description: `Booking ${booking.confirmation_code} for ${booking.party_size}${booking.notes ? ` — ${booking.notes}` : ""}`,
+        location: [
+          booking.venue_locations?.name,
+          booking.venues?.address ?? venueName,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        date: booking.booking_date,
+        time: booking.booking_time,
+        durationMinutes: hours.slot_minutes,
+      }),
+    );
+  }
+
+  const unchanged =
+    newDate === booking.booking_date &&
+    newTime === formatSlot(booking.booking_time);
 
   return (
     <li className="flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
       <div className="flex flex-wrap items-center gap-4 p-5">
-        {/* Venue thumbnail */}
         {imageUrl ? (
           <img
             src={imageUrl}
@@ -217,13 +241,29 @@ function BookingRow({
         )}
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <p className="truncate text-sm font-semibold text-foreground">
-            {venueName}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            <span className="tabular-nums">
-              {booking.booking_date} at {booking.booking_time.slice(0, 5)}
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/venues/$slug"
+              params={{ slug: booking.venue_slug }}
+              className="truncate text-sm font-semibold text-foreground hover:underline"
+            >
+              {venueName}
+            </Link>
+            <span
+              className="rounded-full bg-muted px-2 py-0.5 font-mono text-[11px] font-semibold tracking-wider text-muted-foreground"
+              title="Confirmation code"
+            >
+              {booking.confirmation_code}
             </span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            <time
+              dateTime={`${booking.booking_date}T${booking.booking_time}`}
+              className="tabular-nums"
+            >
+              {formatBookingDate(booking.booking_date)} at{" "}
+              {formatSlot(booking.booking_time)}
+            </time>
             {" · "}
             {booking.party_size}{" "}
             {booking.party_size === 1 ? "person" : "people"}
@@ -231,56 +271,79 @@ function BookingRow({
               ? ` · ${booking.venue_locations.name}`
               : ""}
           </p>
-          {error ? (
-            <p className="text-xs text-destructive">{error}</p>
+          {booking.notes ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium">Notes:</span> {booking.notes}
+            </p>
           ) : null}
-          {rescheduleSuccess ? (
-            <p className="text-xs text-green-600 dark:text-green-400">
-              {rescheduleSuccess}
+          {error ? (
+            <p className="text-xs text-destructive" role="alert">
+              {error}
             </p>
           ) : null}
         </div>
 
         <StatusPill status={booking.status} />
 
-        <div className="flex gap-2">
-          {reschedulable && booking.status === "confirmed" && !rescheduling && (
+        <div className="flex flex-wrap gap-2">
+          {booking.status === "confirmed" ? (
             <button
-              onClick={() => {
-                setRescheduling(true);
-                setRescheduleError(null);
-              }}
-              disabled={busy}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+              type="button"
+              onClick={addToCalendar}
+              className={pillClass("gap-1.5 text-xs")}
+              aria-label={`Add ${venueName} booking to calendar`}
             >
-              Reschedule
+              <CalendarPlus className="h-3.5 w-3.5" aria-hidden />
+              Calendar
             </button>
-          )}
-          {cancellable && booking.status === "confirmed" && !rescheduling && (
-            <button
-              onClick={handleCancel}
-              disabled={busy}
-              className="rounded-full border border-border bg-card px-4 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-destructive/40 hover:text-destructive disabled:opacity-50"
+          ) : null}
+          {editable && booking.status === "confirmed" && !rescheduling ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setRescheduling(true);
+                  setError(null);
+                }}
+                disabled={busy}
+                className={pillClass("text-xs")}
+              >
+                Reschedule
+              </button>
+              <ConfirmButton
+                title="Cancel this booking?"
+                description={`Your table at ${venueName} on ${formatBookingDate(booking.booking_date)} at ${formatSlot(booking.booking_time)} will be released. This cannot be undone.`}
+                confirmLabel="Cancel booking"
+                cancelLabel="Keep booking"
+                onConfirm={handleCancel}
+                disabled={busy}
+                className={pillClass("text-xs", { danger: true })}
+              >
+                {busy ? "Cancelling…" : "Cancel"}
+              </ConfirmButton>
+            </>
+          ) : null}
+          {booking.status === "completed" ? (
+            <Link
+              to="/venues/$slug"
+              params={{ slug: booking.venue_slug }}
+              className={pillClass("text-xs")}
             >
-              {busy ? "Cancelling…" : "Cancel"}
-            </button>
-          )}
+              Leave a review
+            </Link>
+          ) : null}
         </div>
       </div>
 
-      {/* ── Inline reschedule form ─────────────────────────────── */}
-      {rescheduling && (
+      {rescheduling ? (
         <form
           onSubmit={handleReschedule}
           className="border-t border-border bg-muted/30 px-5 py-4"
         >
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-            Reschedule booking
+            Move this booking
           </p>
-          {rescheduleError && (
-            <p className="mb-2 text-xs text-destructive">{rescheduleError}</p>
-          )}
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-1">
               <label
                 htmlFor={`date-${booking.id}`}
@@ -295,62 +358,47 @@ function BookingRow({
                 min={todayInTirana()}
                 value={newDate}
                 onChange={(e) => setNewDate(e.target.value)}
-                className="h-9 rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-10 w-fit rounded-xl border border-input bg-background px-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
-
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-muted-foreground">
                 New time
               </span>
-              <div className="flex flex-wrap gap-1.5">
-                {TIME_SLOTS.map((slot) => (
-                  <button
-                    key={slot}
-                    type="button"
-                    onClick={() => setNewTime(slot)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition-all ${
-                      newTime === slot
-                        ? "bg-primary text-primary-foreground"
-                        : "border border-border bg-card text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {slot}
-                  </button>
-                ))}
-              </div>
+              <SlotPicker
+                venueSlug={booking.venue_slug}
+                date={newDate}
+                slots={slots}
+                selected={newTime}
+                capacity={Number.MAX_SAFE_INTEGER}
+                onSelect={setNewTime}
+                excludeBookingId={booking.id}
+              />
             </div>
           </div>
-
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="submit"
-              disabled={
-                busy ||
-                (newDate === booking.booking_date &&
-                  newTime === booking.booking_time.slice(0, 5))
-              }
-              className="rounded-full bg-primary px-5 py-1.5 text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+              disabled={busy || unchanged || !newTime}
+              className={primaryPillClass("text-xs")}
             >
-              {busy ? "Rescheduling…" : "Confirm new time"}
+              {busy ? "Moving…" : "Confirm new time"}
             </button>
             <button
               type="button"
               onClick={() => {
                 setRescheduling(false);
                 setNewDate(booking.booking_date);
-                setNewTime(
-                  booking.booking_time.slice(0, 5) as (typeof TIME_SLOTS)[number],
-                );
-                setRescheduleError(null);
+                setNewTime(formatSlot(booking.booking_time));
+                setError(null);
               }}
-              className="rounded-full border border-border px-4 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+              className={pillClass("text-xs")}
             >
-              Cancel
+              Never mind
             </button>
           </div>
         </form>
-      )}
+      ) : null}
     </li>
   );
 }
@@ -367,28 +415,5 @@ function StatusPill({ status }: { status: Booking["status"] }) {
     >
       {status}
     </span>
-  );
-}
-
-function StatChip({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-[6rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
-        accent ? "bg-accent text-accent-foreground" : "border border-border bg-card"
-      }`}
-    >
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xl font-semibold leading-none text-foreground">
-        {value}
-      </span>
-    </div>
   );
 }

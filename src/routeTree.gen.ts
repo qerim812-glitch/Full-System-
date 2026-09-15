@@ -20,9 +20,13 @@ import { Route as AuthedBookingsRouteImport } from './routes/_authed/bookings'
 import { Route as AuthedDonateRouteImport } from './routes/_authed/donate'
 import { Route as AuthedFavouritesRouteImport } from './routes/_authed/favourites'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
+import { Route as AuthedNotificationsRouteImport } from './routes/_authed/notifications'
 import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
+import { Route as AuthedResetPasswordRouteImport } from './routes/_authed/reset-password'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
+import { Route as AuthedPeopleUserIdRouteImport } from './routes/_authed/people_.$userId'
 import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues_.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -79,9 +83,19 @@ const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedNotificationsRoute = AuthedNotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedPeopleRoute = AuthedPeopleRouteImport.update({
   id: '/people',
   path: '/people',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedResetPasswordRoute = AuthedResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
@@ -89,9 +103,19 @@ const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
   path: '/venues',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthedMessagesUserIdRoute = AuthedMessagesUserIdRouteImport.update({
   id: '/messages_/$userId',
   path: '/messages/$userId',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedPeopleUserIdRoute = AuthedPeopleUserIdRouteImport.update({
+  id: '/people_/$userId',
+  path: '/people/$userId',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedVenuesSlugRoute = AuthedVenuesSlugRouteImport.update({
@@ -111,9 +135,13 @@ export interface FileRoutesByFullPath {
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
   '/messages': typeof AuthedMessagesRoute
+  '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
+  '/reset-password': typeof AuthedResetPasswordRoute
   '/venues': typeof AuthedVenuesRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
+  '/people/$userId': typeof AuthedPeopleUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesByTo {
@@ -127,9 +155,13 @@ export interface FileRoutesByTo {
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
   '/messages': typeof AuthedMessagesRoute
+  '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
+  '/reset-password': typeof AuthedResetPasswordRoute
   '/venues': typeof AuthedVenuesRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
+  '/people/$userId': typeof AuthedPeopleUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesById {
@@ -145,9 +177,13 @@ export interface FileRoutesById {
   '/_authed/donate': typeof AuthedDonateRoute
   '/_authed/favourites': typeof AuthedFavouritesRoute
   '/_authed/messages': typeof AuthedMessagesRoute
+  '/_authed/notifications': typeof AuthedNotificationsRoute
   '/_authed/people': typeof AuthedPeopleRoute
+  '/_authed/reset-password': typeof AuthedResetPasswordRoute
   '/_authed/venues': typeof AuthedVenuesRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
+  '/_authed/people_/$userId': typeof AuthedPeopleUserIdRoute
   '/_authed/venues_/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRouteTypes {
@@ -163,9 +199,13 @@ export interface FileRouteTypes {
     | '/donate'
     | '/favourites'
     | '/messages'
+    | '/notifications'
     | '/people'
+    | '/reset-password'
     | '/venues'
+    | '/auth/callback'
     | '/messages/$userId'
+    | '/people/$userId'
     | '/venues/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -179,9 +219,13 @@ export interface FileRouteTypes {
     | '/donate'
     | '/favourites'
     | '/messages'
+    | '/notifications'
     | '/people'
+    | '/reset-password'
     | '/venues'
+    | '/auth/callback'
     | '/messages/$userId'
+    | '/people/$userId'
     | '/venues/$slug'
   id:
     | '__root__'
@@ -196,9 +240,13 @@ export interface FileRouteTypes {
     | '/_authed/donate'
     | '/_authed/favourites'
     | '/_authed/messages'
+    | '/_authed/notifications'
     | '/_authed/people'
+    | '/_authed/reset-password'
     | '/_authed/venues'
+    | '/auth/callback'
     | '/_authed/messages_/$userId'
+    | '/_authed/people_/$userId'
     | '/_authed/venues_/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -208,6 +256,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -289,11 +338,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedMessagesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/notifications': {
+      id: '/_authed/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof AuthedNotificationsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/people': {
       id: '/_authed/people'
       path: '/people'
       fullPath: '/people'
       preLoaderRoute: typeof AuthedPeopleRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/reset-password': {
+      id: '/_authed/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof AuthedResetPasswordRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/venues': {
@@ -303,11 +366,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedVenuesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authed/messages_/$userId': {
       id: '/_authed/messages_/$userId'
       path: '/messages/$userId'
       fullPath: '/messages/$userId'
       preLoaderRoute: typeof AuthedMessagesUserIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/people_/$userId': {
+      id: '/_authed/people_/$userId'
+      path: '/people/$userId'
+      fullPath: '/people/$userId'
+      preLoaderRoute: typeof AuthedPeopleUserIdRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/venues_/$slug': {
@@ -327,9 +404,12 @@ interface AuthedRouteChildren {
   AuthedDonateRoute: typeof AuthedDonateRoute
   AuthedFavouritesRoute: typeof AuthedFavouritesRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
+  AuthedNotificationsRoute: typeof AuthedNotificationsRoute
   AuthedPeopleRoute: typeof AuthedPeopleRoute
+  AuthedResetPasswordRoute: typeof AuthedResetPasswordRoute
   AuthedVenuesRoute: typeof AuthedVenuesRoute
   AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
+  AuthedPeopleUserIdRoute: typeof AuthedPeopleUserIdRoute
   AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
 }
 
@@ -340,9 +420,12 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedDonateRoute: AuthedDonateRoute,
   AuthedFavouritesRoute: AuthedFavouritesRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,
+  AuthedNotificationsRoute: AuthedNotificationsRoute,
   AuthedPeopleRoute: AuthedPeopleRoute,
+  AuthedResetPasswordRoute: AuthedResetPasswordRoute,
   AuthedVenuesRoute: AuthedVenuesRoute,
   AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
+  AuthedPeopleUserIdRoute: AuthedPeopleUserIdRoute,
   AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,
 }
 
@@ -355,6 +438,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -147,18 +147,23 @@ export const upsertMyReview = createServerFn({ method: "POST" })
 
 /**
  * Deletes the caller's own review for a venue.
- * "reviews: delete own" makes any other user's row match nothing, so no
- * explicit user_id filter is needed here.
+ *
+ * The user_id filter is NOT redundant: "reviews: admin moderates" is FOR ALL,
+ * so an admin pressing "Remove my review" on the venue page would otherwise
+ * delete every review for that venue.
  */
 export const deleteMyReview = createServerFn({ method: "POST" })
   .validator((data: unknown) => venueOnlySchema.parse(data))
   .handler(async ({ data }) => {
     const supabase = getSupabaseServerClient();
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const, error: "Please sign in again." };
 
     const { error } = await supabase
       .from("reviews")
       .delete()
-      .eq("venue_slug", data.venueSlug);
+      .eq("venue_slug", data.venueSlug)
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("[reviews] delete failed:", error.message);

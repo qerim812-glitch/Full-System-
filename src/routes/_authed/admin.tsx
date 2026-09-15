@@ -1,5 +1,5 @@
 import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription } from "../../components/ui/alert";
@@ -26,8 +26,10 @@ import {
   type AuditEntry,
 } from "../../lib/admin";
 import { formatAmount } from "../../lib/donations";
+import { StatChip } from "../../components/StatChip";
 
-type Tab = "reports" | "donations" | "bookings" | "venues" | "members" | "audit";
+type Tab =
+  "reports" | "donations" | "bookings" | "venues" | "members" | "audit";
 
 export const Route = createFileRoute("/_authed/admin")({
   beforeLoad: ({ context }) => {
@@ -179,9 +181,7 @@ function AdminPage() {
                         {report.reportedUserLabel && report.venueName
                           ? " · "
                           : ""}
-                        {report.venueName
-                          ? `Venue: ${report.venueName}`
-                          : null}
+                        {report.venueName ? `Venue: ${report.venueName}` : null}
                       </p>
                       {report.description && (
                         <p className="text-sm text-muted-foreground">
@@ -566,7 +566,9 @@ function VenuesPanel({
                 <ActionButton
                   label={venue.is_active ? "Deactivate" : "Activate"}
                   busy={busyId === venue.slug}
-                  onClick={() => void toggleActive(venue.slug, !venue.is_active)}
+                  onClick={() =>
+                    void toggleActive(venue.slug, !venue.is_active)
+                  }
                   variant={venue.is_active ? "danger" : "primary"}
                 />
               </div>
@@ -894,17 +896,27 @@ function AuditPanel() {
   const [loadingMore, setLoadingMore] = useState(false);
   const PAGE_SIZE = 50;
 
-  // Initial load
-  if (page === -1 && !loading) {
+  // Initial load. Was previously kicked off inside render (setState during
+  // render), which double-fires in StrictMode and is a hooks-rules violation.
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
     fetchAuditLog({ data: { page: 0 } })
       .then((rows) => {
+        if (cancelled) return;
         setEntries(rows);
         setPage(0);
       })
-      .catch(() => toast.error("Could not load audit log."))
-      .finally(() => setLoading(false));
-  }
+      .catch(() => {
+        if (!cancelled) toast.error("Could not load audit log.");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function loadMore() {
     setLoadingMore(true);
@@ -937,10 +949,7 @@ function AuditPanel() {
     return (
       <div className="flex flex-col gap-2">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div
-            key={i}
-            className="h-14 animate-pulse rounded-2xl bg-muted"
-          />
+          <div key={i} className="h-14 animate-pulse rounded-2xl bg-muted" />
         ))}
       </div>
     );
@@ -949,7 +958,8 @@ function AuditPanel() {
   return (
     <div className="flex flex-col gap-4">
       <p className="text-xs text-muted-foreground">
-        Append-only log of every admin action. Records cannot be edited or deleted.
+        Append-only log of every admin action. Records cannot be edited or
+        deleted.
       </p>
 
       {entries.length === 0 ? (
@@ -977,9 +987,7 @@ function AuditPanel() {
                 </div>
                 <p className="text-xs text-muted-foreground">
                   by {entry.actor_name ?? entry.actor_id.slice(0, 8)}…
-                  {Object.keys(entry.detail).length > 0
-                    ? ` · ${JSON.stringify(entry.detail)}`
-                    : ""}
+                  {entry.detail !== "{}" ? ` · ${entry.detail}` : ""}
                 </p>
               </div>
               <time
@@ -1012,31 +1020,6 @@ function AuditPanel() {
 }
 
 /* ── Shared helpers ────────────────────────────────────────────────────── */
-
-function StatChip({
-  label,
-  value,
-  accent = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`flex min-w-[7rem] flex-col gap-0.5 rounded-2xl px-5 py-3 shadow-sm ${
-        accent
-          ? "bg-accent text-accent-foreground"
-          : "border border-border bg-card"
-      }`}
-    >
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="text-xl font-semibold leading-none text-foreground">
-        {value}
-      </span>
-    </div>
-  );
-}
 
 function ActionButton({
   label,
