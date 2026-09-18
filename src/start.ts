@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
+import { reportError } from "./lib/monitoring";
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -14,6 +15,7 @@ const errorMiddleware = createMiddleware().server(async ({ next }) => {
       throw error;
     }
     console.error(error);
+    reportError(error, { source: "request-middleware" });
     return new Response(renderErrorPage(), {
       status: 500,
       headers: { "content-type": "text/html; charset=utf-8" },

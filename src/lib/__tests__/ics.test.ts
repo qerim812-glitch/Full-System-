@@ -26,7 +26,7 @@ describe("buildIcs", () => {
     expect(ics).toContain("DTSTART;TZID=Europe/Tirane:20260916T190000");
     expect(ics).toContain("DTEND;TZID=Europe/Tirane:20260916T203000");
     expect(ics).toContain("DTSTAMP:20260910T100000Z");
-    expect(ics).toContain("UID:abc-123@newpop");
+    expect(ics).toContain("UID:abc-123@socialcircle");
     expect(ics.endsWith("END:VCALENDAR" + String.fromCharCode(13, 10))).toBe(
       true,
     );

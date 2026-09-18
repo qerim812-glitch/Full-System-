@@ -13,8 +13,10 @@ import {
 import { ReportDialog } from "../../components/ReportDialog";
 import { StarRating } from "../../components/StarRating";
 import { StatChip } from "../../components/StatChip";
+import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { blockUser, unblockUser } from "../../lib/messaging";
 import { fetchMemberProfile } from "../../lib/people";
+import { fetchMyProfile, interestLabel } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
 import {
   removeConnection,
@@ -24,13 +26,17 @@ import {
 import { formatDate } from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/people_/$userId")({
-  loader: async ({ params }) => ({
-    member: await fetchMemberProfile({ data: { userId: params.userId } }),
-  }),
+  loader: async ({ params }) => {
+    const [member, me] = await Promise.all([
+      fetchMemberProfile({ data: { userId: params.userId } }),
+      fetchMyProfile(),
+    ]);
+    return { member, myInterests: me?.interests ?? [] };
+  },
   head: ({ loaderData }) =>
     pageHead(
       loaderData?.member?.profile.display_name?.trim() || "Member",
-      "Member profile on NewPop.",
+      "Member profile on Social Circle.",
       { noindex: true },
     ),
   errorComponent: () => (
@@ -44,7 +50,7 @@ export const Route = createFileRoute("/_authed/people_/$userId")({
 });
 
 function MemberPage() {
-  const { member } = Route.useLoaderData();
+  const { member, myInterests } = Route.useLoaderData();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -92,6 +98,7 @@ function MemberPage() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               {name}
             </h1>
+            {profile.is_verified ? <VerifiedBadge size="md" /> : null}
             {isMe ? (
               <span className="rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground">
                 You
@@ -111,6 +118,35 @@ function MemberPage() {
             <p className="mt-1 text-sm text-muted-foreground">
               Member since {formatDate(profile.created_at)}
             </p>
+          ) : null}
+
+          {profile.bio ? (
+            <p className="mt-3 whitespace-pre-wrap text-sm text-foreground">
+              {profile.bio}
+            </p>
+          ) : null}
+
+          {profile.interests && profile.interests.length > 0 ? (
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {profile.interests.map((interest) => {
+                // Shared interests are highlighted — that is the reason to
+                // show the list at all on someone else's profile.
+                const isShared = myInterests.includes(interest);
+                return (
+                  <li
+                    key={interest}
+                    className={
+                      isShared
+                        ? "rounded-full bg-accent px-2.5 py-0.5 text-[11px] font-semibold text-accent-foreground"
+                        : "rounded-full border border-border px-2.5 py-0.5 text-[11px] text-muted-foreground"
+                    }
+                    title={isShared ? "You both like this" : undefined}
+                  >
+                    {interestLabel(interest)}
+                  </li>
+                );
+              })}
+            </ul>
           ) : null}
 
           <div className="mt-4 flex flex-wrap gap-3">

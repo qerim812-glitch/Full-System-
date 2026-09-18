@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import {
+  getSupabaseServiceRoleClient,
+  serviceRoleConfigured,
+} from "./supabase/service-role";
+import {
   getCurrentUser,
   getSupabaseServerClient,
   isAdminUser,
@@ -101,8 +105,14 @@ export type AdminReport = {
   created_at: string;
   reported_user_id: string | null;
   venue_slug: string | null;
+  target_kind: string | null;
+  target_id: string | null;
   reportedUserLabel: string | null;
   venueName: string | null;
+  /** The reported message / review itself, when the report names one. */
+  targetBody: string | null;
+  /** True when target_kind names a row that has since been deleted. */
+  targetMissing: boolean;
 };
 
 /**
@@ -121,7 +131,7 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
     const { data, error } = await supabase
       .from("reports")
       .select(
-        "id, reason, description, status, created_at, reported_user_id, venue_slug",
+        "id, reason, description, status, created_at, reported_user_id, venue_slug, target_kind, target_id",
       )
       .in("status", ["open", "reviewing"])
       .order("created_at", { ascending: true })
@@ -180,11 +190,44 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
       (venuesResult.data ?? []).map((v) => [v["slug"], v]),
     );
 
+    // The reported content itself, so a moderator can judge the report without
+    // leaving the queue. Fetched per kind in two batched queries rather than
+    // one per report. Direct messages are deliberately excluded: an admin
+    // reading a private thread wholesale is a bigger privilege than reviewing
+    // a report needs, so those show as "private message" with no body.
+    const idsOfKind = (kind: string) =>
+      reports
+        .filter((r) => r["target_kind"] === kind && r["target_id"])
+        .map((r) => r["target_id"] as string);
+
+    const reviewIds = idsOfKind("review");
+    const chatIds = idsOfKind("chat_message");
+
+    const [reviewRows, chatRows] = await Promise.all([
+      reviewIds.length > 0
+        ? supabase.from("reviews").select("id, comment").in("id", reviewIds)
+        : Promise.resolve({ data: [], error: null }),
+      chatIds.length > 0
+        ? supabase.from("chat_messages").select("id, body").in("id", chatIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+
+    const targetBodies = new Map<string, string | null>();
+    for (const row of (reviewRows.data ?? []) as Record<string, unknown>[]) {
+      targetBodies.set(row["id"] as string, (row["comment"] as string) ?? "");
+    }
+    for (const row of (chatRows.data ?? []) as Record<string, unknown>[]) {
+      targetBodies.set(row["id"] as string, (row["body"] as string) ?? "");
+    }
+
     return reports.map((r) => {
       const profile = r.reported_user_id
         ? profileMap.get(r.reported_user_id)
         : undefined;
       const venue = r.venue_slug ? venueMap.get(r.venue_slug) : undefined;
+      const targetId = r["target_id"] as string | null;
+      const targetKind = r["target_kind"] as string | null;
+      const hasBody = targetKind === "review" || targetKind === "chat_message";
 
       return {
         ...r,
@@ -194,6 +237,13 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
             "Unknown member")
           : null,
         venueName: r.venue_slug ? (venue?.["name"] ?? r.venue_slug) : null,
+        targetBody:
+          hasBody && targetId ? (targetBodies.get(targetId) ?? null) : null,
+        // A report whose content was already deleted or hidden still matters —
+        // say so rather than rendering an empty quote that reads as "no text".
+        targetMissing: Boolean(
+          hasBody && targetId && !targetBodies.has(targetId),
+        ),
       };
     });
   },
@@ -372,27 +422,67 @@ export type AdminMember = {
   created_at: string;
 };
 
+/** Rows plus the unfiltered-by-page total, so the UI can page through. */
+export type AdminPage<T> = { rows: T[]; total: number };
+
+export const ADMIN_PAGE_SIZE = 50;
+
+/**
+ * Escapes a user-supplied search term for PostgREST's `or` filter.
+ *
+ * `,` separates the filters and `%` is the wildcard, so a term containing
+ * either would otherwise change the shape of the query rather than being
+ * searched for. Backslash-escaping is what PostgREST expects inside `ilike`.
+ */
+export function escapeSearchTerm(term: string): string {
+  return term.replace(/[\\%_,().]/g, (c) => `\\${c}`);
+}
+
 export const fetchMembers = createServerFn({ method: "GET" })
   .validator((data: unknown) =>
-    z.object({ page: z.number().int().min(0).default(0) }).parse(data),
+    z
+      .object({
+        page: z.number().int().min(0).default(0),
+        search: z.string().trim().max(120).optional(),
+        suspended: z.boolean().optional(),
+      })
+      .parse(data),
   )
-  .handler(async ({ data }): Promise<AdminMember[]> => {
+  .handler(async ({ data }): Promise<AdminPage<AdminMember>> => {
     await requireAdmin();
     const supabase = getSupabaseServerClient();
-    const PAGE = 50;
-    const { data: rows, error } = await supabase
+
+    let query = supabase
       .from("profiles")
       .select(
         "id, display_name, email, date_of_birth, is_suspended, created_at",
-      )
+        { count: "exact" },
+      );
+
+    if (data.search) {
+      const term = escapeSearchTerm(data.search);
+      query = query.or(`display_name.ilike.%${term}%,email.ilike.%${term}%`);
+    }
+    if (data.suspended !== undefined) {
+      query = query.eq("is_suspended", data.suspended);
+    }
+
+    const {
+      data: rows,
+      error,
+      count,
+    } = await query
       .order("created_at", { ascending: false })
-      .range(data.page * PAGE, (data.page + 1) * PAGE - 1);
+      .range(
+        data.page * ADMIN_PAGE_SIZE,
+        (data.page + 1) * ADMIN_PAGE_SIZE - 1,
+      );
 
     if (error) {
       console.error("[admin] fetchMembers failed:", error.message);
-      return [];
+      return { rows: [], total: 0 };
     }
-    return (rows ?? []) as AdminMember[];
+    return { rows: (rows ?? []) as AdminMember[], total: count ?? 0 };
   });
 
 /* ── Venue management ───────────────────────────────────────────────────── */
@@ -413,11 +503,13 @@ export type AdminVenue = {
   min_age: number;
   max_age: number;
   capacity: number;
+  lat: number | null;
+  lng: number | null;
   is_active: boolean;
 };
 
 const ADMIN_VENUE_COLUMNS =
-  "slug, name, description, image_url, location_url, address, phone, category, price_band, opens_at, closes_at, slot_minutes, min_age, max_age, capacity, is_active";
+  "slug, name, description, image_url, location_url, address, phone, category, price_band, opens_at, closes_at, slot_minutes, min_age, max_age, capacity, lat, lng, is_active";
 
 export const fetchAdminVenues = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminVenue[]> => {
@@ -440,6 +532,11 @@ export const fetchAdminVenues = createServerFn({ method: "GET" }).handler(
       opens_at: ((r["opens_at"] as string | null) ?? "18:00").slice(0, 5),
       closes_at: ((r["closes_at"] as string | null) ?? "23:00").slice(0, 5),
       slot_minutes: (r["slot_minutes"] as number | null) ?? 60,
+      // numeric(9,6) comes back from PostgREST as a string.
+      lat:
+        r["lat"] === null || r["lat"] === undefined ? null : Number(r["lat"]),
+      lng:
+        r["lng"] === null || r["lng"] === undefined ? null : Number(r["lng"]),
     }));
   },
 );
@@ -474,7 +571,20 @@ export const venueUpsertSchema = z
     min_age: z.number().int().min(18).max(99),
     max_age: z.number().int().min(18).max(99),
     capacity: z.number().int().min(1).max(10000),
+    lat: z.number().min(-90).max(90).nullable().optional(),
+    lng: z.number().min(-180).max(180).nullable().optional(),
   })
+  // Mirrors venues_latlng_range in 0021: half a coordinate pair would put a
+  // pin at an undefined longitude.
+  .refine(
+    (v) =>
+      (v.lat === null || v.lat === undefined) ===
+      (v.lng === null || v.lng === undefined),
+    {
+      message: "Enter both latitude and longitude, or neither",
+      path: ["lng"],
+    },
+  )
   .refine((v) => v.max_age >= v.min_age, {
     message: "Maximum age must be at least the minimum age",
     path: ["max_age"],
@@ -506,6 +616,8 @@ export const upsertVenue = createServerFn({ method: "POST" })
       min_age: data.min_age,
       max_age: data.max_age,
       capacity: data.capacity,
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
     });
 
     if (error) {
@@ -761,6 +873,9 @@ export type AdminLocation = {
   name: string;
   address: string | null;
   capacity: number | null;
+  /** Both set or both null — venue_locations_latlng_range in 0021. */
+  lat: number | null;
+  lng: number | null;
   is_active: boolean;
 };
 
@@ -786,18 +901,33 @@ export const fetchAdminLocations = createServerFn({ method: "GET" })
       name: r["name"] as string,
       address: (r["address"] as string | null) ?? null,
       capacity: (r["capacity"] as number | null) ?? null,
+      lat: r["lat"] === null ? null : Number(r["lat"]),
+      lng: r["lng"] === null ? null : Number(r["lng"]),
       is_active: r["is_active"] as boolean,
     }));
   });
 
-const locationUpsertSchema = z.object({
-  id: z.string().uuid().optional(),
-  venueSlug: z.string().min(1).max(120),
-  name: z.string().trim().min(1).max(120),
-  address: z.string().trim().max(300).nullable().optional(),
-  capacity: z.number().int().min(1).max(10000).nullable().optional(),
-  is_active: z.boolean().default(true),
-});
+const locationUpsertSchema = z
+  .object({
+    id: z.string().uuid().optional(),
+    venueSlug: z.string().min(1).max(120),
+    name: z.string().trim().min(1).max(120),
+    address: z.string().trim().max(300).nullable().optional(),
+    capacity: z.number().int().min(1).max(10000).nullable().optional(),
+    lat: z.number().min(-90).max(90).nullable().optional(),
+    lng: z.number().min(-180).max(180).nullable().optional(),
+    is_active: z.boolean().default(true),
+  })
+  // Same both-or-neither rule as venue_locations_latlng_range in 0021.
+  .refine(
+    (v) =>
+      (v.lat === null || v.lat === undefined) ===
+      (v.lng === null || v.lng === undefined),
+    {
+      message: "Enter both latitude and longitude, or neither",
+      path: ["lng"],
+    },
+  );
 
 export const upsertLocation = createServerFn({ method: "POST" })
   .validator((data: unknown) => locationUpsertSchema.parse(data))
@@ -809,6 +939,8 @@ export const upsertLocation = createServerFn({ method: "POST" })
       name: data.name,
       address: data.address ?? null,
       capacity: data.capacity ?? null,
+      lat: data.lat ?? null,
+      lng: data.lng ?? null,
       is_active: data.is_active,
     };
     const query = data.id
@@ -1099,5 +1231,655 @@ export const exportBookingsCsv = createServerFn({ method: "GET" }).handler(
       ];
     });
     return toCsv(headers, out);
+  },
+);
+
+/* ── Analytics ──────────────────────────────────────────────────────────── */
+
+export type BookingsDay = { day: string; bookings: number; cancelled: number };
+export type VenueBookings = {
+  venue_slug: string;
+  venue_name: string;
+  bookings: number;
+  seats: number;
+};
+export type MembersWeek = { week_start: string; joined: number };
+export type DonationTotal = {
+  currency: string;
+  confirmed_minor: number;
+  pending_minor: number;
+  confirmed_count: number;
+  pending_count: number;
+};
+
+export type AdminAnalytics = {
+  bookingsDaily: BookingsDay[];
+  bookingsByVenue: VenueBookings[];
+  membersWeekly: MembersWeek[];
+  donationTotals: DonationTotal[];
+};
+
+/**
+ * The four aggregate series behind the Dashboard tab.
+ *
+ * These are RPCs rather than PostgREST queries because each one groups across
+ * every member's rows — `select … group by` is not expressible through
+ * PostgREST, and pulling every booking into JS to count it would get slower
+ * with every booking taken. The functions are `security definer` and check
+ * `is_admin()` themselves (0016), so the aggregation happens next to the data
+ * without handing a non-admin a way to read it.
+ */
+export const fetchAdminAnalytics = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        days: z.number().int().min(7).max(365).default(30),
+        weeks: z.number().int().min(4).max(104).default(12),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<AdminAnalytics> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const [daily, byVenue, weekly, donations] = await Promise.all([
+      supabase.rpc("admin_bookings_daily", { days: data.days }),
+      supabase.rpc("admin_bookings_by_venue"),
+      supabase.rpc("admin_members_weekly", { weeks: data.weeks }),
+      supabase.rpc("admin_donation_totals"),
+    ]);
+
+    // A failed aggregate returns null, which would render as an empty chart
+    // indistinguishable from "no bookings yet". Log each one.
+    for (const [label, result] of [
+      ["bookings_daily", daily],
+      ["bookings_by_venue", byVenue],
+      ["members_weekly", weekly],
+      ["donation_totals", donations],
+    ] as const) {
+      if (result.error) {
+        console.error(`[admin] analytics ${label}:`, result.error.message);
+      }
+    }
+
+    return {
+      bookingsDaily: (daily.data ?? []) as BookingsDay[],
+      bookingsByVenue: (byVenue.data ?? []) as VenueBookings[],
+      membersWeekly: (weekly.data ?? []) as MembersWeek[],
+      donationTotals: (donations.data ?? []) as DonationTotal[],
+    };
+  });
+
+/* ── Member drill-down ──────────────────────────────────────────────────── */
+
+export type MemberStats = {
+  bookings_total: number;
+  bookings_confirmed: number;
+  bookings_cancelled: number;
+  reviews_total: number;
+  reports_filed: number;
+  reports_received: number;
+  connections_total: number;
+  donations_confirmed_count: number;
+};
+
+export type MemberDetail = {
+  profile: AdminMember & { avatar_url: string | null };
+  stats: MemberStats | null;
+  isAdmin: boolean;
+  recentBookings: Array<{
+    id: string;
+    venue_slug: string;
+    venue_name: string | null;
+    booking_date: string;
+    booking_time: string;
+    party_size: number;
+    status: string;
+  }>;
+  recentReviews: Array<{
+    id: string;
+    venue_slug: string;
+    rating: number;
+    comment: string | null;
+    is_hidden: boolean;
+    created_at: string;
+  }>;
+};
+
+/**
+ * Everything about one member on one screen.
+ *
+ * `isAdmin` comes from the auth user's app_metadata, which lives in
+ * `auth.users` and is not reachable through PostgREST — hence the service-role
+ * admin API. When the service-role key is absent the field falls back to false
+ * and the UI hides the role controls rather than showing a wrong badge.
+ */
+export const fetchMemberDetail = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z.object({ userId: z.string().uuid() }).parse(data),
+  )
+  .handler(async ({ data }): Promise<MemberDetail | null> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    const [profileResult, statsResult, bookingsResult, reviewsResult] =
+      await Promise.all([
+        supabase
+          .from("profiles")
+          .select(
+            "id, display_name, email, date_of_birth, is_suspended, avatar_url, created_at",
+          )
+          .eq("id", data.userId)
+          .maybeSingle(),
+        supabase.rpc("admin_member_stats", { member_id: data.userId }),
+        supabase
+          .from("bookings")
+          .select(
+            "id, venue_slug, booking_date, booking_time, party_size, status, venues(name)",
+          )
+          .eq("user_id", data.userId)
+          .order("booking_date", { ascending: false })
+          .limit(10),
+        supabase
+          .from("reviews")
+          .select("id, venue_slug, rating, comment, is_hidden, created_at")
+          .eq("user_id", data.userId)
+          .order("created_at", { ascending: false })
+          .limit(10),
+      ]);
+
+    if (profileResult.error || !profileResult.data) {
+      if (profileResult.error) {
+        console.error(
+          "[admin] fetchMemberDetail profile:",
+          profileResult.error.message,
+        );
+      }
+      return null;
+    }
+
+    // admin_member_stats returns a single row; PostgREST hands back an array.
+    const statsRows = (statsResult.data ?? []) as MemberStats[];
+    if (statsResult.error) {
+      console.error("[admin] member stats:", statsResult.error.message);
+    }
+
+    let isAdmin = false;
+    if (serviceRoleConfigured()) {
+      try {
+        const { data: authUser } =
+          await getSupabaseServiceRoleClient().auth.admin.getUserById(
+            data.userId,
+          );
+        isAdmin = authUser?.user?.app_metadata?.["role"] === "admin";
+      } catch (error) {
+        console.error("[admin] could not read role:", error);
+      }
+    }
+
+    return {
+      profile: profileResult.data as MemberDetail["profile"],
+      stats: statsRows[0] ?? null,
+      isAdmin,
+      recentBookings: (
+        (bookingsResult.data ?? []) as Record<string, unknown>[]
+      ).map((b) => ({
+        id: b["id"] as string,
+        venue_slug: b["venue_slug"] as string,
+        venue_name: (b["venues"] as { name: string } | null)?.name ?? null,
+        booking_date: b["booking_date"] as string,
+        booking_time: String(b["booking_time"] ?? "").slice(0, 5),
+        party_size: b["party_size"] as number,
+        status: b["status"] as string,
+      })),
+      recentReviews: (reviewsResult.data ??
+        []) as MemberDetail["recentReviews"],
+    };
+  });
+
+/**
+ * Grant or revoke admin.
+ *
+ * The role lives in `app_metadata`, never `user_metadata`: a user can write
+ * their own user_metadata through the client SDK, so a role stored there would
+ * be self-grantable and would hand any account the whole database. app_metadata
+ * is writable only with the service-role key, which is why this needs it.
+ *
+ * The change lands in the JWT when it is next issued, so the target must sign
+ * out and back in — the return value says so, and the UI repeats it.
+ */
+export const setMemberAdmin = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z.object({ userId: z.string().uuid(), admin: z.boolean() }).parse(data),
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    if (data.userId === actor.id) {
+      // Without this an admin can lock the whole team out of the dashboard in
+      // one click, with no way back that does not involve the CLI.
+      return {
+        ok: false as const,
+        error: "You cannot change your own admin role.",
+      };
+    }
+    if (!serviceRoleConfigured()) {
+      return {
+        ok: false as const,
+        error:
+          "SUPABASE_SERVICE_ROLE_KEY is not configured on the server, so roles cannot be changed from here. Use scripts/promote-admin.mjs.",
+      };
+    }
+
+    const service = getSupabaseServiceRoleClient();
+    const { data: existing, error: readError } =
+      await service.auth.admin.getUserById(data.userId);
+    if (readError || !existing?.user) {
+      return { ok: false as const, error: "That member no longer exists." };
+    }
+
+    // Spread the existing metadata: app_metadata is replaced wholesale, so
+    // assigning only { role } would silently drop the provider claims Supabase
+    // keeps there.
+    const appMetadata = { ...(existing.user.app_metadata ?? {}) };
+    if (data.admin) appMetadata["role"] = "admin";
+    else delete appMetadata["role"];
+
+    const { error } = await service.auth.admin.updateUserById(data.userId, {
+      app_metadata: appMetadata,
+    });
+    if (error) {
+      console.error("[admin] setMemberAdmin failed:", error.message);
+      return { ok: false as const, error: "Could not change that role." };
+    }
+
+    await audit(
+      getSupabaseServerClient(),
+      actor.id,
+      data.admin ? "user.promote_admin" : "user.demote_admin",
+      "profile",
+      data.userId,
+    );
+
+    return {
+      ok: true as const,
+      note: "They must sign out and back in for it to take effect.",
+    };
+  });
+
+/**
+ * Erase a member and everything of theirs (GDPR article 17).
+ *
+ * Deleting the auth user cascades: profiles, bookings, reviews, chat messages,
+ * direct messages, connections and check-ins all reference `auth.users` with
+ * ON DELETE CASCADE. Donations use ON DELETE SET NULL on purpose — the
+ * financial record has to survive, and it keeps only an amount once the
+ * member is gone.
+ *
+ * Irreversible, so it takes the member's exact email as confirmation rather
+ * than trusting a single click.
+ */
+export const deleteMember = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        userId: z.string().uuid(),
+        confirmEmail: z.string().trim().min(1).max(320),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const actor = await requireAdmin();
+
+    if (data.userId === actor.id) {
+      return {
+        ok: false as const,
+        error: "Delete your own account from the Account page, not here.",
+      };
+    }
+    if (!serviceRoleConfigured()) {
+      return {
+        ok: false as const,
+        error:
+          "SUPABASE_SERVICE_ROLE_KEY is not configured on the server, so accounts cannot be deleted from here.",
+      };
+    }
+
+    const supabase = getSupabaseServerClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email, display_name")
+      .eq("id", data.userId)
+      .maybeSingle();
+
+    const email = (profile as { email: string | null } | null)?.email ?? null;
+    if (!email || email.toLowerCase() !== data.confirmEmail.toLowerCase()) {
+      return {
+        ok: false as const,
+        error: "That email does not match this member. Nothing was deleted.",
+      };
+    }
+
+    // Audited BEFORE the delete: audit_log.actor_id references auth.users, and
+    // writing the entry afterwards would race the cascade that removes the row
+    // the entry points at.
+    await audit(supabase, actor.id, "user.delete", "profile", data.userId, {
+      email,
+    });
+
+    const { error } =
+      await getSupabaseServiceRoleClient().auth.admin.deleteUser(data.userId);
+    if (error) {
+      console.error("[admin] deleteMember failed:", error.message);
+      return { ok: false as const, error: "Could not delete that account." };
+    }
+    return { ok: true as const };
+  });
+
+/* ── Reviews ────────────────────────────────────────────────────────────── */
+
+export type AdminReview = {
+  id: string;
+  venue_slug: string;
+  venue_name: string | null;
+  user_id: string;
+  author_name: string | null;
+  author_email: string | null;
+  rating: number;
+  comment: string | null;
+  is_hidden: boolean;
+  created_at: string;
+};
+
+/**
+ * Every review, filterable — the moderation feed only ever showed the latest
+ * 50 mixed with chat, which is no use for "show me the one-star reviews of
+ * this venue".
+ */
+export const fetchAdminReviews = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        page: z.number().int().min(0).default(0),
+        venueSlug: z.string().max(120).optional(),
+        rating: z.number().int().min(1).max(5).optional(),
+        hidden: z.boolean().optional(),
+        search: z.string().trim().max(200).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<AdminPage<AdminReview>> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+
+    let query = supabase
+      .from("reviews")
+      .select(
+        "id, venue_slug, user_id, rating, comment, is_hidden, created_at",
+        { count: "exact" },
+      );
+
+    if (data.venueSlug) query = query.eq("venue_slug", data.venueSlug);
+    if (data.rating !== undefined) query = query.eq("rating", data.rating);
+    if (data.hidden !== undefined) query = query.eq("is_hidden", data.hidden);
+    if (data.search) {
+      query = query.ilike("comment", `%${escapeSearchTerm(data.search)}%`);
+    }
+
+    const {
+      data: rows,
+      error,
+      count,
+    } = await query
+      .order("created_at", { ascending: false })
+      .range(
+        data.page * ADMIN_PAGE_SIZE,
+        (data.page + 1) * ADMIN_PAGE_SIZE - 1,
+      );
+
+    if (error) {
+      console.error("[admin] fetchAdminReviews failed:", error.message);
+      return { rows: [], total: 0 };
+    }
+
+    const reviews = (rows ?? []) as Record<string, unknown>[];
+    const userIds = [...new Set(reviews.map((r) => r["user_id"] as string))];
+    const slugs = [...new Set(reviews.map((r) => r["venue_slug"] as string))];
+
+    const [profiles, venues] = await Promise.all([
+      userIds.length > 0
+        ? supabase
+            .from("profiles")
+            .select("id, display_name, email")
+            .in("id", userIds)
+        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+      slugs.length > 0
+        ? supabase.from("venues").select("slug, name").in("slug", slugs)
+        : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    ]);
+
+    const profileMap = new Map(
+      ((profiles.data ?? []) as Record<string, unknown>[]).map((p) => [
+        p["id"] as string,
+        p,
+      ]),
+    );
+    const venueMap = new Map(
+      ((venues.data ?? []) as Record<string, unknown>[]).map((v) => [
+        v["slug"] as string,
+        v["name"] as string,
+      ]),
+    );
+
+    return {
+      total: count ?? 0,
+      rows: reviews.map((r) => {
+        const profile = profileMap.get(r["user_id"] as string);
+        return {
+          id: r["id"] as string,
+          venue_slug: r["venue_slug"] as string,
+          venue_name: venueMap.get(r["venue_slug"] as string) ?? null,
+          user_id: r["user_id"] as string,
+          author_name: (profile?.["display_name"] as string | null) ?? null,
+          author_email: (profile?.["email"] as string | null) ?? null,
+          rating: r["rating"] as number,
+          comment: (r["comment"] as string | null) ?? null,
+          is_hidden: r["is_hidden"] as boolean,
+          created_at: r["created_at"] as string,
+        };
+      }),
+    };
+  });
+
+/* ── More CSV exports ───────────────────────────────────────────────────── */
+
+const EXPORT_LIMIT = 5000;
+
+/** Every member as CSV. Emails are personal data — handle the file carefully. */
+export const exportMembersCsv = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: rows, error } = await supabase
+      .from("profiles")
+      .select(
+        "id, display_name, email, date_of_birth, is_suspended, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(EXPORT_LIMIT);
+    if (error) {
+      console.error("[admin] exportMembersCsv failed:", error.message);
+      throw new Error("Could not export members");
+    }
+    return toCsv(
+      ["id", "name", "email", "date_of_birth", "suspended", "joined"],
+      ((rows ?? []) as Record<string, unknown>[]).map((r) => [
+        r["id"],
+        r["display_name"] ?? "",
+        r["email"] ?? "",
+        r["date_of_birth"],
+        r["is_suspended"] ? "yes" : "no",
+        r["created_at"],
+      ]),
+    );
+  },
+);
+
+/**
+ * Every donation as CSV.
+ *
+ * `amount_minor` is exported as a decimal string built by slicing, not by
+ * dividing — `1250 / 100` is fine but `amount / 100` on larger values in a
+ * spreadsheet is where rounding creeps into money.
+ */
+export const exportDonationsCsv = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: rows, error } = await supabase
+      .from("donations")
+      .select(
+        "id, amount_minor, currency, method, provider, status, donor_email, donor_name, provider_ref, message, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(EXPORT_LIMIT);
+    if (error) {
+      console.error("[admin] exportDonationsCsv failed:", error.message);
+      throw new Error("Could not export donations");
+    }
+    return toCsv(
+      [
+        "id",
+        "amount",
+        "currency",
+        "method",
+        "provider",
+        "status",
+        "donor_email",
+        "donor_name",
+        "provider_ref",
+        "message",
+        "created_at",
+      ],
+      ((rows ?? []) as Record<string, unknown>[]).map((r) => {
+        const minor = String(r["amount_minor"] ?? "0").padStart(3, "0");
+        return [
+          r["id"],
+          `${minor.slice(0, -2)}.${minor.slice(-2)}`,
+          r["currency"],
+          r["method"],
+          r["provider"],
+          r["status"],
+          r["donor_email"] ?? "",
+          r["donor_name"] ?? "",
+          r["provider_ref"] ?? "",
+          r["message"] ?? "",
+          r["created_at"],
+        ];
+      }),
+    );
+  },
+);
+
+/** Every report as CSV, resolved ones included. */
+export const exportReportsCsv = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: rows, error } = await supabase
+      .from("reports")
+      .select(
+        "id, reason, description, status, target_kind, target_id, reported_user_id, venue_slug, resolution_note, resolved_at, created_at",
+      )
+      .order("created_at", { ascending: false })
+      .limit(EXPORT_LIMIT);
+    if (error) {
+      console.error("[admin] exportReportsCsv failed:", error.message);
+      throw new Error("Could not export reports");
+    }
+    return toCsv(
+      [
+        "id",
+        "reason",
+        "status",
+        "target_kind",
+        "target_id",
+        "reported_user_id",
+        "venue_slug",
+        "description",
+        "resolution_note",
+        "resolved_at",
+        "created_at",
+      ],
+      ((rows ?? []) as Record<string, unknown>[]).map((r) => [
+        r["id"],
+        r["reason"],
+        r["status"],
+        r["target_kind"] ?? "",
+        r["target_id"] ?? "",
+        r["reported_user_id"] ?? "",
+        r["venue_slug"] ?? "",
+        r["description"] ?? "",
+        r["resolution_note"] ?? "",
+        r["resolved_at"] ?? "",
+        r["created_at"],
+      ]),
+    );
+  },
+);
+
+/** Every review as CSV, hidden ones included and flagged. */
+export const exportReviewsCsv = createServerFn({ method: "GET" }).handler(
+  async (): Promise<string> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: rows, error } = await supabase
+      .from("reviews")
+      .select("id, venue_slug, user_id, rating, comment, is_hidden, created_at")
+      .order("created_at", { ascending: false })
+      .limit(EXPORT_LIMIT);
+    if (error) {
+      console.error("[admin] exportReviewsCsv failed:", error.message);
+      throw new Error("Could not export reviews");
+    }
+    const reviews = (rows ?? []) as Record<string, unknown>[];
+    const userIds = [...new Set(reviews.map((r) => r["user_id"] as string))];
+    const profiles = userIds.length
+      ? await supabase
+          .from("profiles")
+          .select("id, display_name, email")
+          .in("id", userIds)
+      : { data: [] as Record<string, unknown>[] };
+    const profileMap = new Map(
+      ((profiles.data ?? []) as Record<string, unknown>[]).map((p) => [
+        p["id"] as string,
+        p,
+      ]),
+    );
+    return toCsv(
+      [
+        "id",
+        "venue",
+        "member",
+        "email",
+        "rating",
+        "hidden",
+        "comment",
+        "created_at",
+      ],
+      reviews.map((r) => {
+        const p = profileMap.get(r["user_id"] as string);
+        return [
+          r["id"],
+          r["venue_slug"],
+          p?.["display_name"] ?? "",
+          p?.["email"] ?? "",
+          r["rating"],
+          r["is_hidden"] ? "yes" : "no",
+          r["comment"] ?? "",
+          r["created_at"],
+        ];
+      }),
+    );
   },
 );

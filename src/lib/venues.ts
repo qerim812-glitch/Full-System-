@@ -24,6 +24,9 @@ export type Venue = {
   min_age: number;
   max_age: number;
   capacity: number;
+  /** Both set or both null — enforced by venues_latlng_range in 0021. */
+  lat: number | null;
+  lng: number | null;
   /** From venue_rating_summary; null when the venue has no visible reviews. */
   average_rating: number | null;
   review_count: number;
@@ -35,6 +38,8 @@ export type VenueLocation = {
   name: string;
   address: string | null;
   capacity: number | null;
+  lat: number | null;
+  lng: number | null;
 };
 
 export type VenueReview = {
@@ -48,7 +53,7 @@ export type VenueReview = {
 };
 
 const VENUE_COLUMNS =
-  "slug, name, description, image_url, location_url, address, phone, category, price_band, opens_at, closes_at, slot_minutes, min_age, max_age, capacity";
+  "slug, name, description, image_url, location_url, address, phone, category, price_band, opens_at, closes_at, slot_minutes, min_age, max_age, capacity, lat, lng";
 
 type RatingRow = {
   venue_slug: string;
@@ -100,7 +105,19 @@ function withDefaults(
     min_age: row["min_age"] as number,
     max_age: row["max_age"] as number,
     capacity: row["capacity"] as number,
+    // numeric(9,6) arrives from PostgREST as a string, so it is coerced here
+    // rather than at every call site — a string latitude would silently break
+    // the map's bounds arithmetic instead of failing loudly.
+    lat: toCoordinate(row["lat"]),
+    lng: toCoordinate(row["lng"]),
   };
+}
+
+/** numeric | string | null → number | null. */
+function toCoordinate(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
@@ -153,7 +170,7 @@ export const fetchVenue = createServerFn({ method: "GET" })
           .maybeSingle(),
         supabase
           .from("venue_locations")
-          .select("id, venue_slug, name, address, capacity")
+          .select("id, venue_slug, name, address, capacity, lat, lng")
           .eq("venue_slug", data.slug)
           .eq("is_active", true)
           .order("name"),

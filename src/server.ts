@@ -2,6 +2,11 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { initServerMonitoring, reportError } from "./lib/monitoring";
+
+// Fire-and-forget: the first requests may be reported without it, which beats
+// delaying every response behind a dynamic import.
+void initServerMonitoring();
 
 type ServerEntry = {
   fetch: (
@@ -34,9 +39,10 @@ async function normalizeCatastrophicSsrResponse(
   const body = await response.clone().text();
   if (!isH3SwallowedErrorBody(body)) return response;
 
-  console.error(
-    consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`),
-  );
+  const swallowed =
+    consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`);
+  console.error(swallowed);
+  reportError(swallowed, { source: "h3-swallowed-ssr" });
   return new Response(renderErrorPage(), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
@@ -63,6 +69,7 @@ export default {
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
+      reportError(error, { source: "ssr-fetch" });
       return new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },

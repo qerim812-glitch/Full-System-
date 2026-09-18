@@ -38,7 +38,7 @@ export function RouteError({
 }: {
   title: string;
   body?: string;
-  backTo?: "/venues" | "/bookings" | "/messages" | "/people";
+  backTo?: "/venues" | "/bookings" | "/messages" | "/people" | "/meetups";
   backLabel?: string;
 }) {
   return (
@@ -59,7 +59,7 @@ export function BackLink({
   to,
   children,
 }: {
-  to: "/venues" | "/messages" | "/people" | "/bookings";
+  to: "/venues" | "/messages" | "/people" | "/bookings" | "/meetups";
   children: ReactNode;
 }) {
   return (

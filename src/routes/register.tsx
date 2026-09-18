@@ -12,10 +12,11 @@ import { fetchAuthUser, signUp } from "../lib/auth";
 import { pageHead } from "../lib/seo";
 
 export const Route = createFileRoute("/register")({
-  head: () => pageHead("Create account", "Join NewPop — for ages 18 and over."),
+  head: () =>
+    pageHead("Create account", "Join Social Circle — for ages 18 and over."),
   beforeLoad: async () => {
     const user = await fetchAuthUser();
-    if (user) throw redirect({ to: "/venues" });
+    if (user) throw redirect({ to: "/feed" });
   },
   component: RegisterPage,
 });
@@ -99,12 +100,12 @@ function RegisterPage() {
         return;
       }
       await router.invalidate();
-      await router.navigate({ to: "/venues" });
+      await router.navigate({ to: "/feed" });
     } catch (err) {
       const message = err instanceof Error ? err.message : "";
       setError(
         /at least 18/i.test(message)
-          ? "You must be at least 18 to join NewPop."
+          ? "You must be at least 18 to join Social Circle."
           : "Please check the form and try again.",
       );
     } finally {
@@ -134,7 +135,7 @@ function RegisterPage() {
   return (
     <AuthLayout
       title="Create your account"
-      subtitle="NewPop is for ages 18 and over."
+      subtitle="Social Circle is for ages 18 and over."
     >
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         {error && (
@@ -224,10 +225,40 @@ function RegisterPage() {
           />
         </Field>
 
+        {/* Notice rather than a tick box: the processing here is necessary to
+            provide the account, so it rests on contract, not consent — and a
+            checkbox implying otherwise would be misleading. The links must be
+            reachable before signing up, which is why the policies are public
+            routes. */}
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          By creating an account you confirm you are 18 or over and agree to our{" "}
+          <Link
+            to="/terms"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            terms
+          </Link>
+          ,{" "}
+          <Link
+            to="/privacy"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            privacy policy
+          </Link>{" "}
+          and{" "}
+          <Link
+            to="/guidelines"
+            className="font-medium text-foreground underline underline-offset-2"
+          >
+            community guidelines
+          </Link>
+          .
+        </p>
+
         <button
           type="submit"
           disabled={busy}
-          className="mt-2 w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+          className="w-full rounded-full bg-primary py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {busy ? "Creating account…" : "Create account"}
         </button>

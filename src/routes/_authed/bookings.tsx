@@ -205,7 +205,7 @@ function BookingRow({
 
   function addToCalendar() {
     downloadIcs(
-      `newpop-${booking.venue_slug}-${booking.booking_date}`,
+      `social-circle-${booking.venue_slug}-${booking.booking_date}`,
       buildIcs({
         uid: booking.id,
         title: `Table at ${venueName}`,

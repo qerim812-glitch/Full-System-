@@ -65,11 +65,11 @@ export function buildIcs(event: IcsEvent, now: Date = new Date()): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//NewPop//Booking//EN",
+    "PRODID:-//Social Circle//Booking//EN",
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:${event.uid}@newpop`,
+    `UID:${event.uid}@socialcircle`,
     `DTSTAMP:${stamp}`,
     `DTSTART;TZID=Europe/Tirane:${icsLocalStamp(event.date, event.time)}`,
     `DTEND;TZID=Europe/Tirane:${addMinutes(event.date, event.time, event.durationMinutes ?? 90)}`,

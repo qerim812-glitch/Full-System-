@@ -14,6 +14,7 @@ import {
 } from "../../components/Skeletons";
 import { StatChip } from "../../components/StatChip";
 import { VenueCard } from "../../components/VenueCard";
+import { VenueMap, type MapPin } from "../../components/VenueMap";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { fetchMyProfile } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
@@ -70,6 +71,7 @@ function VenuesPage() {
   const [age, setAge] = useState<AgeFilter>("any");
   const [category, setCategory] = useState<string>("all");
   const [sort, setSort] = useState<VenueSort>("name");
+  const [view, setView] = useState<"list" | "map">("list");
   const favoriteSet = new Set(favorites);
 
   const visible = sortVenues(
@@ -121,6 +123,28 @@ function VenuesPage() {
             placeholder="Search venues…"
             label="Search venues"
           />
+          <div
+            className="flex items-center gap-1 rounded-full border border-border bg-card p-0.5"
+            role="group"
+            aria-label="View"
+          >
+            {(["list", "map"] as const).map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setView(option)}
+                aria-pressed={view === option}
+                className={
+                  view === option
+                    ? "rounded-full bg-primary px-3 py-1.5 text-xs font-semibold capitalize text-primary-foreground"
+                    : "rounded-full px-3 py-1.5 text-xs font-medium capitalize text-muted-foreground hover:text-foreground"
+                }
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+
           <label className="flex items-center gap-2 text-xs text-muted-foreground">
             Sort
             <select
@@ -197,6 +221,24 @@ function VenuesPage() {
             body="Try clearing the search or adjusting the filters."
           />
         )
+      ) : view === "map" ? (
+        <VenueMap
+          pins={visible.flatMap((venue): MapPin[] =>
+            // Both coordinates or neither — the constraint in 0021 guarantees
+            // it, and this narrows the nullable types for TypeScript too.
+            venue.lat !== null && venue.lng !== null
+              ? [
+                  {
+                    id: venue.slug,
+                    name: venue.name,
+                    lat: venue.lat,
+                    lng: venue.lng,
+                    detail: venue.address,
+                  },
+                ]
+              : [],
+          )}
+        />
       ) : (
         <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {visible.map((venue) => (

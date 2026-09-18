@@ -11,6 +11,10 @@ export type PublicProfile = {
   id: string;
   display_name: string | null;
   avatar_url: string | null;
+  bio?: string | null;
+  interests?: string[];
+  /** A human compared their photo with their avatar. Never self-set. */
+  is_verified?: boolean;
 };
 
 /** A name to show when a profile is missing, suspended, or deleted. */
@@ -147,7 +151,9 @@ export const fetchMemberProfile = createServerFn({ method: "GET" })
       await Promise.all([
         supabase
           .from("public_profiles")
-          .select("id, display_name, avatar_url, created_at")
+          .select(
+            "id, display_name, avatar_url, bio, interests, is_verified, created_at",
+          )
           .eq("id", data.userId)
           .maybeSingle(),
         supabase

@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { fileReport, REPORT_REASONS, type ReportReason } from "../lib/reports";
+import {
+  fileReport,
+  REPORT_REASONS,
+  type ReportReason,
+  type ReportTargetKind,
+} from "../lib/reports";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -28,15 +33,28 @@ const REASON_LABELS: Record<ReportReason, string> = {
  * Files a report against either a venue or a member. Exactly one of
  * `venueSlug`/`reportedUserId` should be passed by the caller — mirrors the
  * `reports_has_subject` CHECK constraint in 0007_moderation.sql.
+ *
+ * `targetKind`/`targetId` are optional and narrow the report to one piece of
+ * content (a chat message, a review). When they are given, the admin queue
+ * shows that content inline instead of making a moderator hunt for it.
+ *
+ * `compact` renders the trigger as a small inline link, for putting one on
+ * every message in a list without the row turning into a wall of buttons.
  */
 export function ReportDialog({
   venueSlug,
   reportedUserId,
+  targetKind,
+  targetId,
   triggerLabel = "Report",
+  compact = false,
 }: {
   venueSlug?: string;
   reportedUserId?: string;
+  targetKind?: ReportTargetKind;
+  targetId?: string;
   triggerLabel?: string;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<ReportReason>(REPORT_REASONS[0]);
@@ -54,6 +72,8 @@ export function ReportDialog({
           description: description.trim() || undefined,
           venueSlug,
           reportedUserId,
+          targetKind,
+          targetId,
         },
       });
 
@@ -75,9 +95,18 @@ export function ReportDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm">
-          {triggerLabel}
-        </Button>
+        {compact ? (
+          <button
+            type="button"
+            className="text-[11px] font-medium text-muted-foreground underline-offset-2 transition-colors hover:text-destructive hover:underline"
+          >
+            {triggerLabel}
+          </button>
+        ) : (
+          <Button variant="ghost" size="sm">
+            {triggerLabel}
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">

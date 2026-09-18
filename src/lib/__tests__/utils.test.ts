@@ -15,12 +15,12 @@ describe("safeRedirect", () => {
     expect(safeRedirect("/venues/mulliri?x=1")).toBe("/venues/mulliri?x=1");
   });
   it("rejects protocol-relative and absolute URLs", () => {
-    expect(safeRedirect("//evil.com")).toBe("/venues");
-    expect(safeRedirect("https://evil.com")).toBe("/venues");
-    expect(safeRedirect("/\\evil.com")).toBe("/venues");
+    expect(safeRedirect("//evil.com")).toBe("/feed");
+    expect(safeRedirect("https://evil.com")).toBe("/feed");
+    expect(safeRedirect("/\\evil.com")).toBe("/feed");
   });
   it("falls back when empty", () => {
-    expect(safeRedirect(undefined)).toBe("/venues");
+    expect(safeRedirect(undefined)).toBe("/feed");
     expect(safeRedirect("", "/account")).toBe("/account");
   });
 });

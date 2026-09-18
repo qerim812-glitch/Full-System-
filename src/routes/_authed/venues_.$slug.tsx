@@ -301,7 +301,11 @@ function VenueDetailPage() {
                   review unlocks once your booking time passes.
                 </div>
               )}
-              <ReviewList reviews={reviews} />
+              <ReviewList
+                reviews={reviews}
+                venueSlug={venue.slug}
+                myReviewId={myReview?.id}
+              />
               {reviewCount > reviews.length ? (
                 <p className="text-xs text-muted-foreground">
                   Showing the {reviews.length} most recent of {reviewCount}{" "}

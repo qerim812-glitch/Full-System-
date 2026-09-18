@@ -1,6 +1,6 @@
 {
-  "name": "NewPop — book a table across Tirana",
-  "short_name": "NewPop",
+  "name": "Social Circle — book a table across Tirana",
+  "short_name": "Social Circle",
   "description": "Reserve a table at cafés and lounges across Tirana, see who's going and chat with them.",
   "start_url": "/venues",
   "scope": "/",
@@ -10,6 +10,11 @@
   "lang": "en",
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }

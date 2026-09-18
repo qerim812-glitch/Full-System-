@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CalendarCheck, MessageCircle, ShieldCheck, Users } from "lucide-react";
 
 import { pillClass, primaryPillClass } from "../components/PageChrome";
+import { SiteFooter } from "../components/SiteFooter";
 import { VenueCard } from "../components/VenueCard";
 import { fetchAuthUser } from "../lib/auth";
 import { DEFAULT_DESCRIPTION, pageHead } from "../lib/seo";
@@ -9,13 +10,13 @@ import { fetchVenues } from "../lib/venues";
 
 /**
  * Public landing page. Signed-in members go straight to /venues; visitors
- * see what NewPop is and the venue grid (venues are publicly readable by
+ * see what Social Circle is and the venue grid (venues are publicly readable by
  * RLS, so this is the one page search engines can index).
  */
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     const user = await fetchAuthUser();
-    if (user) throw redirect({ to: "/venues" });
+    if (user) throw redirect({ to: "/feed" });
   },
   loader: async () => {
     try {
@@ -56,8 +57,8 @@ function LandingPage() {
   return (
     <div className="min-h-dvh bg-background">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <span className="flex h-9 items-center rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
-          NewPop
+        <span className="flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
+          Social Circle
         </span>
         <nav className="flex items-center gap-2" aria-label="Account">
           <Link to="/login" className={pillClass()}>
@@ -79,8 +80,8 @@ function LandingPage() {
               Reserve a table. Find your people.
             </h1>
             <p className="max-w-xl text-base text-muted-foreground">
-              NewPop lets you book a table at the best spots in Tirana, see
-              which friends are going out tonight and chat with the people
+              Social Circle lets you book a table at the best spots in Tirana,
+              see which friends are going out tonight and chat with the people
               who'll be there.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -135,14 +136,7 @@ function LandingPage() {
         ) : null}
       </main>
 
-      <footer className="border-t border-border">
-        <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-6 text-xs text-muted-foreground sm:px-6">
-          <span>© {new Date().getFullYear()} NewPop · Tirana</span>
-          <Link to="/donate" className="hover:text-foreground hover:underline">
-            Support the project
-          </Link>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

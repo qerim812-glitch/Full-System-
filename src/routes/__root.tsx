@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "../components/ui/sonner";
 import { THEME_INIT_SCRIPT } from "../hooks/use-theme";
+import { DEFAULT_LOCALE, LocaleProvider, getLocale } from "../i18n";
+import { DEFAULT_OG_IMAGE, SITE_NAME, absoluteUrl } from "../lib/seo";
 import appCss from "../styles.css?url";
 
 function NotFoundComponent() {
@@ -77,23 +79,48 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
 
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   {
+    // Resolved on the server from the cookie, so the markup, <html lang> and
+    // the browser all agree on the language from the first byte.
+    beforeLoad: async () => ({ locale: await getLocale() }),
     head: () => ({
       meta: [
         { charSet: "utf-8" },
         { name: "viewport", content: "width=device-width, initial-scale=1" },
-        { title: "NewPop · Book a table across Tirana" },
+        { title: "Social Circle · Book a table across Tirana" },
         {
           name: "description",
           content:
             "Reserve a table at cafés and lounges across Tirana — Mulliri, Moncherie, Le Chateau, Komiteti and more.",
         },
-        { property: "og:title", content: "NewPop" },
+        { property: "og:title", content: "Social Circle" },
         {
           property: "og:description",
           content: "Reserve a table at cafés and lounges across Tirana.",
         },
         { property: "og:type", content: "website" },
+        { property: "og:site_name", content: SITE_NAME },
         { name: "twitter:card", content: "summary_large_image" },
+        // Absolute, because the platforms that render a preview fetch the
+        // image from their own servers. Omitted when VITE_SITE_URL is unset —
+        // a broken image tag previews worse than none.
+        ...(absoluteUrl(DEFAULT_OG_IMAGE)
+          ? [
+              {
+                property: "og:image",
+                content: absoluteUrl(DEFAULT_OG_IMAGE) as string,
+              },
+              {
+                name: "twitter:image",
+                content: absoluteUrl(DEFAULT_OG_IMAGE) as string,
+              },
+              { property: "og:image:width", content: "1200" },
+              { property: "og:image:height", content: "630" },
+              {
+                property: "og:image:alt",
+                content: "Social Circle — book a table across Tirana",
+              },
+            ]
+          : []),
         { name: "theme-color", content: "#232633" },
       ],
       links: [
@@ -116,8 +143,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 );
 
 function RootShell({ children }: { children: ReactNode }) {
+  // The shell renders outside the route context, so the locale is read from
+  // the matched root context rather than useLocale().
+  const locale = Route.useRouteContext({
+    select: (context) => context.locale ?? DEFAULT_LOCALE,
+  });
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <head>
         <HeadContent />
       </head>
@@ -130,15 +162,18 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
-  const { queryClient } = Route.useRouteContext();
+  const { queryClient, locale } = Route.useRouteContext();
 
   return (
     <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-      {/* Mounted once here so toast() works anywhere. Without it every
-          toast call silently does nothing. */}
-      <Toaster />
+      {/* Locale by context, never a mutable global — see src/i18n. */}
+      <LocaleProvider locale={locale ?? DEFAULT_LOCALE}>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+        {/* Mounted once here so toast() works anywhere. Without it every
+            toast call silently does nothing. */}
+        <Toaster />
+      </LocaleProvider>
     </QueryClientProvider>
   );
 }

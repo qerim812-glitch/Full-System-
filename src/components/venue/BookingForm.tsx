@@ -111,11 +111,11 @@ export function BookingForm({
   function addToCalendar(booking: Booking) {
     const location = locations.find((l) => l.id === booking.location_id);
     downloadIcs(
-      `newpop-${venue.slug}-${booking.booking_date}`,
+      `social-circle-${venue.slug}-${booking.booking_date}`,
       buildIcs({
         uid: booking.id,
         title: `Table at ${venue.name}`,
-        description: `Booking ${booking.confirmation_code} for ${booking.party_size} — NewPop`,
+        description: `Booking ${booking.confirmation_code} for ${booking.party_size} — Social Circle`,
         location: [location?.name, venue.address ?? venue.name]
           .filter(Boolean)
           .join(", "),

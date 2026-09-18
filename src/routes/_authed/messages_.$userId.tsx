@@ -17,10 +17,9 @@ import {
   markThreadRead,
   sendDirectMessage,
 } from "../../lib/messaging";
+import { useRealtime } from "../../hooks/use-realtime";
 import { pageHead } from "../../lib/seo";
 import { cn, formatDateTime, formatTime, todayInTirana } from "../../lib/utils";
-
-const POLL_MS = 5000;
 
 export const Route = createFileRoute("/_authed/messages_/$userId")({
   loader: async ({ params }) => {
@@ -80,20 +79,17 @@ function ThreadPage() {
     }
   }
 
+  // Realtime on direct_messages. The filter cannot express "either direction
+  // of this conversation" in one PostgREST expression, so it watches the rows
+  // addressed to me and refetches the thread — which is what the poll did
+  // anyway, just without waiting up to five seconds for it.
+  useRealtime({
+    table: "direct_messages",
+    onChange: () => void refresh(),
+  });
+
   useEffect(() => {
-    let active = true;
-    const timer = setInterval(() => {
-      if (active && document.visibilityState === "visible") void refresh();
-    }, POLL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => {
-      active = false;
-      clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisible);
-    };
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 

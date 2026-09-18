@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestUrl } from "@tanstack/react-start/server";
 import { z } from "zod";
 
+import { RATE_LIMITED_MESSAGE, allowAuthAttempt } from "./rate-limit";
 import {
   getCurrentUser,
   getSupabaseServerClient,
@@ -99,6 +100,12 @@ export const fetchAuthUser = createServerFn({ method: "GET" }).handler(
 export const signIn = createServerFn({ method: "POST" })
   .validator((data: unknown) => signInSchema.parse(data))
   .handler(async ({ data }) => {
+    // Checked before the credentials reach Supabase, so a guessing run costs
+    // one cheap database call rather than a full auth round trip.
+    if (!(await allowAuthAttempt("signin", data.email))) {
+      return { ok: false as const, error: RATE_LIMITED_MESSAGE };
+    }
+
     const supabase = getSupabaseServerClient();
     const { data: result, error } = await supabase.auth.signInWithPassword({
       email: data.email,
@@ -124,6 +131,10 @@ export const signIn = createServerFn({ method: "POST" })
 export const signUp = createServerFn({ method: "POST" })
   .validator((data: unknown) => signUpSchema.parse(data))
   .handler(async ({ data }) => {
+    if (!(await allowAuthAttempt("signup", data.email))) {
+      return { ok: false as const, error: RATE_LIMITED_MESSAGE };
+    }
+
     const supabase = getSupabaseServerClient();
 
     // date_of_birth and display_name travel in options.data, landing in
@@ -206,6 +217,17 @@ const resetSchema = z.object({ email: emailSchema });
 export const requestPasswordReset = createServerFn({ method: "POST" })
   .validator((data: unknown) => resetSchema.parse(data))
   .handler(async ({ data }) => {
+    // Over the limit, return the SAME success shape as normal rather than an
+    // error. Saying "too many attempts" here would confirm the address is
+    // being targeted, and this endpoint is deliberately indistinguishable for
+    // a registered and an unregistered address.
+    if (!(await allowAuthAttempt("reset", data.email))) {
+      return {
+        ok: true as const,
+        message: "If that email has an account, a reset link is on its way.",
+      };
+    }
+
     const supabase = getSupabaseServerClient();
     // The link lands on /auth/callback, which exchanges the code for a
     // session and forwards to /reset-password to pick a new password.
@@ -307,3 +329,37 @@ export const changePassword = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
+/**
+ * A short-lived access token for Supabase Realtime.
+ *
+ * Realtime authenticates over a websocket, which cannot read the httpOnly
+ * session cookie the rest of the app relies on. So the token has to reach the
+ * browser somehow — but only the ACCESS token, never the refresh token and
+ * never the cookie itself. An access token expires in an hour; a refresh token
+ * would be a permanent key to the account sitting in JavaScript memory.
+ *
+ * With that token, `supabase.realtime.setAuth(token)` makes the websocket
+ * subscribe as the member, so row-level security applies to realtime payloads
+ * exactly as it does to queries. Without it, the socket is anonymous and every
+ * private row is filtered out — the subscription would appear to work and
+ * simply never deliver anything.
+ */
+export const getRealtimeToken = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ token: string; expiresAt: number } | null> => {
+    const supabase = getSupabaseServerClient();
+
+    // getSession() rather than getUser(): the token itself is needed, not just
+    // a verified identity. The cookie it reads was written by @supabase/ssr
+    // from a verified exchange, and the token is handed straight back to
+    // Supabase, which verifies it again — so nothing is trusted twice here.
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session) return null;
+
+    return {
+      token: data.session.access_token,
+      // Seconds since the epoch, as Supabase returns it.
+      expiresAt: data.session.expires_at ?? 0,
+    };
+  },
+);

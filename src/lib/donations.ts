@@ -9,6 +9,8 @@ export type Donation = {
   currency: string;
   method: "bank_transfer" | "card" | "other";
   status: "pending" | "confirmed" | "failed" | "refunded";
+  /** 'buymeacoffee' rows arrive already confirmed from the webhook. */
+  provider: "manual" | "buymeacoffee";
   message: string | null;
   created_at: string;
 };
@@ -57,7 +59,9 @@ export const fetchMyDonations = createServerFn({ method: "GET" }).handler(
     // "donations: read own" scopes this to auth.uid().
     const { data, error } = await supabase
       .from("donations")
-      .select("id, amount_minor, currency, method, status, message, created_at")
+      .select(
+        "id, amount_minor, currency, method, status, provider, message, created_at",
+      )
       .order("created_at", { ascending: false });
 
     if (error) {

@@ -133,7 +133,7 @@ function LoginPage() {
       </form>
 
       <p className="mt-6 text-center text-sm text-muted-foreground">
-        New to NewPop?{" "}
+        New to Social Circle?{" "}
         <Link
           to="/register"
           className="font-medium text-foreground underline-offset-4 hover:underline"

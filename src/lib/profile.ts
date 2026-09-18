@@ -10,9 +10,60 @@ export type Profile = {
   display_name: string | null;
   date_of_birth: string;
   avatar_url: string | null;
+  bio: string | null;
+  interests: string[];
+  is_verified: boolean;
   is_suspended: boolean;
   created_at: string;
 };
+
+/**
+ * The interest vocabulary, matching the `profiles_interests_known` CHECK in
+ * 0019. Curated rather than free text: shared interests only help people find
+ * each other if two people spell them the same way.
+ *
+ * Kept in the same order as the constraint so the two are easy to diff.
+ */
+export const INTERESTS = [
+  "coffee",
+  "cocktails",
+  "live-music",
+  "football",
+  "board-games",
+  "books",
+  "art",
+  "tech",
+  "travel",
+  "food",
+  "dancing",
+  "cinema",
+  "hiking",
+  "photography",
+  "languages",
+  "fitness",
+] as const;
+
+export type Interest = (typeof INTERESTS)[number];
+
+/** Mirrors the cardinality check in 0019. */
+export const MAX_INTERESTS = 8;
+
+export function interestLabel(interest: string): string {
+  return interest
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/** Interests two people have in common, for the discovery feed. */
+export function sharedInterests(
+  mine: string[] | null | undefined,
+  theirs: string[] | null | undefined,
+): string[] {
+  if (!mine?.length || !theirs?.length) return [];
+  const set = new Set(mine);
+  return theirs.filter((interest) => set.has(interest));
+}
 
 export const fetchMyProfile = createServerFn({ method: "GET" }).handler(
   async (): Promise<Profile | null> => {
@@ -21,7 +72,7 @@ export const fetchMyProfile = createServerFn({ method: "GET" }).handler(
     const { data, error } = await supabase
       .from("profiles")
       .select(
-        "id, email, display_name, date_of_birth, avatar_url, is_suspended, created_at",
+        "id, email, display_name, date_of_birth, avatar_url, bio, interests, is_verified, is_suspended, created_at",
       )
       .maybeSingle();
 
@@ -35,6 +86,14 @@ export const fetchMyProfile = createServerFn({ method: "GET" }).handler(
 
 const updateSchema = z.object({
   displayName: z.string().trim().min(2, "Enter your name").max(60),
+  bio: z.string().trim().max(500, "Keep it under 500 characters").optional(),
+  // Validated against the same vocabulary the CHECK constraint enforces, so a
+  // bad value fails here with a readable message rather than as a raw
+  // constraint violation from Postgres.
+  interests: z
+    .array(z.enum(INTERESTS))
+    .max(MAX_INTERESTS, `Pick up to ${MAX_INTERESTS}`)
+    .optional(),
 });
 
 export const updateProfile = createServerFn({ method: "POST" })
@@ -46,7 +105,11 @@ export const updateProfile = createServerFn({ method: "POST" })
     const supabase = getSupabaseServerClient();
     const { error } = await supabase
       .from("profiles")
-      .update({ display_name: data.displayName })
+      .update({
+        display_name: data.displayName,
+        ...(data.bio !== undefined ? { bio: data.bio || null } : {}),
+        ...(data.interests !== undefined ? { interests: data.interests } : {}),
+      })
       .eq("id", user.id);
 
     if (error) {

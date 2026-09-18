@@ -6,10 +6,10 @@ import {
   postVenueChat,
   type ChatMessage,
 } from "../lib/messaging";
+import { useRealtime } from "../hooks/use-realtime";
 import { cn, formatTime } from "../lib/utils";
 import { primaryPillClass } from "./PageChrome";
-
-const POLL_MS = 5000;
+import { ReportDialog } from "./ReportDialog";
 
 export function VenueChat({ venueSlug }: { venueSlug: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -29,18 +29,16 @@ export function VenueChat({ venueSlug }: { venueSlug: string }) {
     }
   }
 
+  // Realtime on chat_messages, falling back to the old 5s poll whenever the
+  // socket is not connected — see useRealtime.
+  useRealtime({
+    table: "chat_messages",
+    filter: `venue_slug=eq.${venueSlug}`,
+    onChange: () => void refresh(),
+  });
+
   useEffect(() => {
-    let active = true;
-    async function tick() {
-      if (active && document.visibilityState === "visible") await refresh();
-    }
-    void tick();
-    const timer = setInterval(() => void tick(), POLL_MS);
-    document.addEventListener("visibilitychange", () => void tick());
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
+    void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [venueSlug]);
 
@@ -112,12 +110,25 @@ export function VenueChat({ venueSlug }: { venueSlug: string }) {
                 </p>
               ) : null}
               <p className="whitespace-pre-wrap break-words">{message.body}</p>
-              <time
-                dateTime={message.created_at}
-                className="mt-1 block text-[11px] opacity-60"
-              >
-                {formatTime(message.created_at)}
-              </time>
+              <div className="mt-1 flex items-center gap-2">
+                <time
+                  dateTime={message.created_at}
+                  className="block text-[11px] opacity-60"
+                >
+                  {formatTime(message.created_at)}
+                </time>
+                {/* Reporting your own message would only waste a moderator's
+                    time, so the control is only on other people's. */}
+                {!message.is_mine ? (
+                  <ReportDialog
+                    compact
+                    venueSlug={venueSlug}
+                    reportedUserId={message.user_id}
+                    targetKind="chat_message"
+                    targetId={message.id}
+                  />
+                ) : null}
+              </div>
             </li>
           ))
         )}

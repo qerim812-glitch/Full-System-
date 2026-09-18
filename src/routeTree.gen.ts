@@ -12,19 +12,29 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as GuidelinesRouteImport } from './routes/guidelines'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as AuthedAccountRouteImport } from './routes/_authed/account'
 import { Route as AuthedAdminRouteImport } from './routes/_authed/admin'
 import { Route as AuthedBookingsRouteImport } from './routes/_authed/bookings'
 import { Route as AuthedDonateRouteImport } from './routes/_authed/donate'
 import { Route as AuthedFavouritesRouteImport } from './routes/_authed/favourites'
+import { Route as AuthedFeedRouteImport } from './routes/_authed/feed'
+import { Route as AuthedMeetupsRouteImport } from './routes/_authed/meetups'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedNotificationsRouteImport } from './routes/_authed/notifications'
 import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
 import { Route as AuthedResetPasswordRouteImport } from './routes/_authed/reset-password'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
+import { Route as ApiBmcWebhookRouteImport } from './routes/api/bmc-webhook'
+import { Route as ApiPushDispatchRouteImport } from './routes/api/push-dispatch'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthedMeetupsMeetupIdRouteImport } from './routes/_authed/meetups_.$meetupId'
 import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
 import { Route as AuthedPeopleUserIdRouteImport } from './routes/_authed/people_.$userId'
 import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues_.$slug'
@@ -43,14 +53,39 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GuidelinesRoute = GuidelinesRouteImport.update({
+  id: '/guidelines',
+  path: '/guidelines',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthedAccountRoute = AuthedAccountRouteImport.update({
@@ -78,6 +113,16 @@ const AuthedFavouritesRoute = AuthedFavouritesRouteImport.update({
   path: '/favourites',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedFeedRoute = AuthedFeedRouteImport.update({
+  id: '/feed',
+  path: '/feed',
+  getParentRoute: () => AuthedRoute,
+} as any)
+const AuthedMeetupsRoute = AuthedMeetupsRouteImport.update({
+  id: '/meetups',
+  path: '/meetups',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
   id: '/messages',
   path: '/messages',
@@ -103,10 +148,25 @@ const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
   path: '/venues',
   getParentRoute: () => AuthedRoute,
 } as any)
+const ApiBmcWebhookRoute = ApiBmcWebhookRouteImport.update({
+  id: '/api/bmc-webhook',
+  path: '/api/bmc-webhook',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPushDispatchRoute = ApiPushDispatchRouteImport.update({
+  id: '/api/push-dispatch',
+  path: '/api/push-dispatch',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthedMeetupsMeetupIdRoute = AuthedMeetupsMeetupIdRouteImport.update({
+  id: '/meetups_/$meetupId',
+  path: '/meetups/$meetupId',
+  getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedMessagesUserIdRoute = AuthedMessagesUserIdRouteImport.update({
   id: '/messages_/$userId',
@@ -127,19 +187,29 @@ const AuthedVenuesSlugRoute = AuthedVenuesSlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/register': typeof RegisterRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthedAccountRoute
   '/admin': typeof AuthedAdminRoute
   '/bookings': typeof AuthedBookingsRoute
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
+  '/feed': typeof AuthedFeedRoute
+  '/meetups': typeof AuthedMeetupsRoute
   '/messages': typeof AuthedMessagesRoute
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
   '/venues': typeof AuthedVenuesRoute
+  '/api/bmc-webhook': typeof ApiBmcWebhookRoute
+  '/api/push-dispatch': typeof ApiPushDispatchRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/people/$userId': typeof AuthedPeopleUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
@@ -147,19 +217,29 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/register': typeof RegisterRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/account': typeof AuthedAccountRoute
   '/admin': typeof AuthedAdminRoute
   '/bookings': typeof AuthedBookingsRoute
   '/donate': typeof AuthedDonateRoute
   '/favourites': typeof AuthedFavouritesRoute
+  '/feed': typeof AuthedFeedRoute
+  '/meetups': typeof AuthedMeetupsRoute
   '/messages': typeof AuthedMessagesRoute
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
   '/venues': typeof AuthedVenuesRoute
+  '/api/bmc-webhook': typeof ApiBmcWebhookRoute
+  '/api/push-dispatch': typeof ApiPushDispatchRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/people/$userId': typeof AuthedPeopleUserIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
@@ -169,19 +249,29 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authed': typeof AuthedRouteWithChildren
   '/forgot-password': typeof ForgotPasswordRoute
+  '/guidelines': typeof GuidelinesRoute
   '/login': typeof LoginRoute
+  '/privacy': typeof PrivacyRoute
   '/register': typeof RegisterRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/terms': typeof TermsRoute
   '/_authed/account': typeof AuthedAccountRoute
   '/_authed/admin': typeof AuthedAdminRoute
   '/_authed/bookings': typeof AuthedBookingsRoute
   '/_authed/donate': typeof AuthedDonateRoute
   '/_authed/favourites': typeof AuthedFavouritesRoute
+  '/_authed/feed': typeof AuthedFeedRoute
+  '/_authed/meetups': typeof AuthedMeetupsRoute
   '/_authed/messages': typeof AuthedMessagesRoute
   '/_authed/notifications': typeof AuthedNotificationsRoute
   '/_authed/people': typeof AuthedPeopleRoute
   '/_authed/reset-password': typeof AuthedResetPasswordRoute
   '/_authed/venues': typeof AuthedVenuesRoute
+  '/api/bmc-webhook': typeof ApiBmcWebhookRoute
+  '/api/push-dispatch': typeof ApiPushDispatchRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/_authed/meetups_/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
   '/_authed/people_/$userId': typeof AuthedPeopleUserIdRoute
   '/_authed/venues_/$slug': typeof AuthedVenuesSlugRoute
@@ -191,19 +281,29 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/forgot-password'
+    | '/guidelines'
     | '/login'
+    | '/privacy'
     | '/register'
+    | '/robots.txt'
+    | '/sitemap.xml'
+    | '/terms'
     | '/account'
     | '/admin'
     | '/bookings'
     | '/donate'
     | '/favourites'
+    | '/feed'
+    | '/meetups'
     | '/messages'
     | '/notifications'
     | '/people'
     | '/reset-password'
     | '/venues'
+    | '/api/bmc-webhook'
+    | '/api/push-dispatch'
     | '/auth/callback'
+    | '/meetups/$meetupId'
     | '/messages/$userId'
     | '/people/$userId'
     | '/venues/$slug'
@@ -211,19 +311,29 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/forgot-password'
+    | '/guidelines'
     | '/login'
+    | '/privacy'
     | '/register'
+    | '/robots.txt'
+    | '/sitemap.xml'
+    | '/terms'
     | '/account'
     | '/admin'
     | '/bookings'
     | '/donate'
     | '/favourites'
+    | '/feed'
+    | '/meetups'
     | '/messages'
     | '/notifications'
     | '/people'
     | '/reset-password'
     | '/venues'
+    | '/api/bmc-webhook'
+    | '/api/push-dispatch'
     | '/auth/callback'
+    | '/meetups/$meetupId'
     | '/messages/$userId'
     | '/people/$userId'
     | '/venues/$slug'
@@ -232,19 +342,29 @@ export interface FileRouteTypes {
     | '/'
     | '/_authed'
     | '/forgot-password'
+    | '/guidelines'
     | '/login'
+    | '/privacy'
     | '/register'
+    | '/robots.txt'
+    | '/sitemap.xml'
+    | '/terms'
     | '/_authed/account'
     | '/_authed/admin'
     | '/_authed/bookings'
     | '/_authed/donate'
     | '/_authed/favourites'
+    | '/_authed/feed'
+    | '/_authed/meetups'
     | '/_authed/messages'
     | '/_authed/notifications'
     | '/_authed/people'
     | '/_authed/reset-password'
     | '/_authed/venues'
+    | '/api/bmc-webhook'
+    | '/api/push-dispatch'
     | '/auth/callback'
+    | '/_authed/meetups_/$meetupId'
     | '/_authed/messages_/$userId'
     | '/_authed/people_/$userId'
     | '/_authed/venues_/$slug'
@@ -254,8 +374,15 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthedRoute: typeof AuthedRouteWithChildren
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  GuidelinesRoute: typeof GuidelinesRoute
   LoginRoute: typeof LoginRoute
+  PrivacyRoute: typeof PrivacyRoute
   RegisterRoute: typeof RegisterRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  TermsRoute: typeof TermsRoute
+  ApiBmcWebhookRoute: typeof ApiBmcWebhookRoute
+  ApiPushDispatchRoute: typeof ApiPushDispatchRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
@@ -282,6 +409,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/guidelines': {
+      id: '/guidelines'
+      path: '/guidelines'
+      fullPath: '/guidelines'
+      preLoaderRoute: typeof GuidelinesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -289,11 +423,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authed/account': {
@@ -331,6 +493,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedFavouritesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/feed': {
+      id: '/_authed/feed'
+      path: '/feed'
+      fullPath: '/feed'
+      preLoaderRoute: typeof AuthedFeedRouteImport
+      parentRoute: typeof AuthedRoute
+    }
+    '/_authed/meetups': {
+      id: '/_authed/meetups'
+      path: '/meetups'
+      fullPath: '/meetups'
+      preLoaderRoute: typeof AuthedMeetupsRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/messages': {
       id: '/_authed/messages'
       path: '/messages'
@@ -366,12 +542,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedVenuesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/api/bmc-webhook': {
+      id: '/api/bmc-webhook'
+      path: '/api/bmc-webhook'
+      fullPath: '/api/bmc-webhook'
+      preLoaderRoute: typeof ApiBmcWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/push-dispatch': {
+      id: '/api/push-dispatch'
+      path: '/api/push-dispatch'
+      fullPath: '/api/push-dispatch'
+      preLoaderRoute: typeof ApiPushDispatchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authed/meetups_/$meetupId': {
+      id: '/_authed/meetups_/$meetupId'
+      path: '/meetups/$meetupId'
+      fullPath: '/meetups/$meetupId'
+      preLoaderRoute: typeof AuthedMeetupsMeetupIdRouteImport
+      parentRoute: typeof AuthedRoute
     }
     '/_authed/messages_/$userId': {
       id: '/_authed/messages_/$userId'
@@ -403,11 +600,14 @@ interface AuthedRouteChildren {
   AuthedBookingsRoute: typeof AuthedBookingsRoute
   AuthedDonateRoute: typeof AuthedDonateRoute
   AuthedFavouritesRoute: typeof AuthedFavouritesRoute
+  AuthedFeedRoute: typeof AuthedFeedRoute
+  AuthedMeetupsRoute: typeof AuthedMeetupsRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
   AuthedNotificationsRoute: typeof AuthedNotificationsRoute
   AuthedPeopleRoute: typeof AuthedPeopleRoute
   AuthedResetPasswordRoute: typeof AuthedResetPasswordRoute
   AuthedVenuesRoute: typeof AuthedVenuesRoute
+  AuthedMeetupsMeetupIdRoute: typeof AuthedMeetupsMeetupIdRoute
   AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
   AuthedPeopleUserIdRoute: typeof AuthedPeopleUserIdRoute
   AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
@@ -419,11 +619,14 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedBookingsRoute: AuthedBookingsRoute,
   AuthedDonateRoute: AuthedDonateRoute,
   AuthedFavouritesRoute: AuthedFavouritesRoute,
+  AuthedFeedRoute: AuthedFeedRoute,
+  AuthedMeetupsRoute: AuthedMeetupsRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,
   AuthedNotificationsRoute: AuthedNotificationsRoute,
   AuthedPeopleRoute: AuthedPeopleRoute,
   AuthedResetPasswordRoute: AuthedResetPasswordRoute,
   AuthedVenuesRoute: AuthedVenuesRoute,
+  AuthedMeetupsMeetupIdRoute: AuthedMeetupsMeetupIdRoute,
   AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
   AuthedPeopleUserIdRoute: AuthedPeopleUserIdRoute,
   AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,
@@ -436,8 +639,15 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthedRoute: AuthedRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  GuidelinesRoute: GuidelinesRoute,
   LoginRoute: LoginRoute,
+  PrivacyRoute: PrivacyRoute,
   RegisterRoute: RegisterRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  TermsRoute: TermsRoute,
+  ApiBmcWebhookRoute: ApiBmcWebhookRoute,
+  ApiPushDispatchRoute: ApiPushDispatchRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport

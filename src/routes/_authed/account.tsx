@@ -6,37 +6,50 @@ import { toast } from "sonner";
 import { Avatar } from "../../components/Avatar";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import {
+  Chip,
   PageHeader,
   RouteError,
   pillClass,
   primaryPillClass,
 } from "../../components/PageChrome";
 import { StatChipSkeleton } from "../../components/Skeletons";
+import { PushToggle } from "../../components/PushToggle";
 import { StatChip } from "../../components/StatChip";
+import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
+import { Textarea } from "../../components/ui/textarea";
 import { changePassword } from "../../lib/auth";
 import { fetchMyBlocks, unblockUser } from "../../lib/messaging";
 import {
+  INTERESTS,
+  MAX_INTERESTS,
   deleteMyAccount,
   exportMyData,
   fetchMyProfile,
+  interestLabel,
   removeAvatar,
   updateProfile,
   uploadAvatar,
+  type Interest,
 } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
 import { fixMissingProfile } from "../../lib/social";
+import {
+  fetchMyVerification,
+  requestVerification,
+} from "../../lib/verification";
 import { ageFromDob, formatBookingDate, formatDate } from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/account")({
   loader: async () => {
-    const [profile, blocks] = await Promise.all([
+    const [profile, blocks, verification] = await Promise.all([
       fetchMyProfile(),
       fetchMyBlocks(),
+      fetchMyVerification(),
     ]);
-    return { profile, blocks };
+    return { profile, blocks, verification };
   },
   head: () => pageHead("Account", undefined, { noindex: true }),
   pendingComponent: () => (
@@ -54,11 +67,51 @@ export const Route = createFileRoute("/_authed/account")({
 type Status = { kind: "ok" | "err"; text: string } | null;
 
 function AccountPage() {
-  const { profile, blocks } = Route.useLoaderData();
+  const { profile, blocks, verification } = Route.useLoaderData();
   const { user } = Route.useRouteContext();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
+  const [bio, setBio] = useState(profile?.bio ?? "");
+  const [interests, setInterests] = useState<string[]>(
+    profile?.interests ?? [],
+  );
+
+  // Selecting more than the constraint allows should be impossible in the UI,
+  // not merely rejected by the database after a round trip.
+  const verifyInputRef = useRef<HTMLInputElement>(null);
+  const [verifying, setVerifying] = useState(false);
+
+  async function submitVerification(file: File) {
+    setVerifying(true);
+    try {
+      // FormData, matching uploadAvatar — the file never touches a client-side
+      // storage call, so the path is derived from the session on the server.
+      const form = new FormData();
+      form.append("file", file);
+      const result = await requestVerification({ data: form });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Photo sent for review.");
+      await router.invalidate();
+    } catch {
+      toast.error("Could not upload that photo.");
+    } finally {
+      setVerifying(false);
+    }
+  }
+
+  function toggleInterest(interest: string) {
+    setInterests((current) =>
+      current.includes(interest)
+        ? current.filter((i) => i !== interest)
+        : current.length >= MAX_INTERESTS
+          ? current
+          : [...current, interest],
+    );
+  }
   const [status, setStatus] = useState<Status>(null);
   const [busy, setBusy] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(
@@ -122,7 +175,9 @@ function AccountPage() {
     setBusy(true);
     setStatus(null);
     try {
-      const result = await updateProfile({ data: { displayName } });
+      const result = await updateProfile({
+        data: { displayName, bio, interests: interests as Interest[] },
+      });
       setStatus(
         result.ok
           ? { kind: "ok", text: "Saved." }
@@ -193,7 +248,7 @@ function AccountPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `newpop-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `social-circle-my-data-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -334,6 +389,53 @@ function AccountPage() {
                   className="rounded-xl"
                 />
               </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="bio" className="text-xs font-medium">
+                  About you{" "}
+                  <span className="font-normal text-muted-foreground">
+                    (optional)
+                  </span>
+                </Label>
+                <Textarea
+                  id="bio"
+                  value={bio}
+                  maxLength={500}
+                  onChange={(e) => setBio(e.target.value)}
+                  placeholder="A line or two so people know who they're meeting."
+                  className="rounded-xl"
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  {bio.length}/500 · shown on your public profile
+                </p>
+              </div>
+
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-xs font-medium text-foreground">
+                  Interests{" "}
+                  <span className="font-normal text-muted-foreground">
+                    ({interests.length}/{MAX_INTERESTS}) — used to suggest
+                    people you might get on with
+                  </span>
+                </legend>
+                <div className="flex flex-wrap gap-2">
+                  {INTERESTS.map((interest) => {
+                    const active = interests.includes(interest);
+                    return (
+                      <Chip
+                        key={interest}
+                        active={active}
+                        disabled={!active && interests.length >= MAX_INTERESTS}
+                        onClick={() => toggleInterest(interest)}
+                        className="px-3 py-1.5 text-xs"
+                      >
+                        {interestLabel(interest)}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
               <button
                 type="submit"
                 disabled={busy}
@@ -342,6 +444,76 @@ function AccountPage() {
                 {busy ? "Saving…" : "Save changes"}
               </button>
             </form>
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="mb-1 text-base font-semibold text-foreground">
+              Push notifications
+            </h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Get told about connection requests, meetup invitations and
+              reminders even when Social Circle is closed.
+            </p>
+            <PushToggle />
+          </section>
+
+          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
+            <h2 className="mb-1 flex items-center gap-2 text-base font-semibold text-foreground">
+              Photo verification
+              {profile?.is_verified ? <VerifiedBadge /> : null}
+            </h2>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Upload a clear photo of your face. A moderator compares it with
+              your profile picture and adds a badge. It is never shown to other
+              members — only the badge is.
+            </p>
+
+            {profile?.is_verified ? (
+              <Alert>
+                <AlertDescription>
+                  Your profile is verified. People can see the badge next to
+                  your name.
+                </AlertDescription>
+              </Alert>
+            ) : verification?.status === "pending" ? (
+              <Alert>
+                <AlertDescription>
+                  Your photo is waiting for review. We will notify you when a
+                  moderator has looked at it.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {verification?.status === "rejected" ? (
+                  <Alert variant="destructive">
+                    <AlertDescription>
+                      Your last photo was not approved
+                      {verification.note ? `: ${verification.note}` : "."} You
+                      can try again with a clearer picture.
+                    </AlertDescription>
+                  </Alert>
+                ) : null}
+                <input
+                  ref={verifyInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void submitVerification(file);
+                    event.target.value = "";
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={verifying}
+                  onClick={() => verifyInputRef.current?.click()}
+                  className={primaryPillClass("w-fit")}
+                >
+                  {verifying ? "Uploading…" : "Upload a photo"}
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-border bg-card p-6 shadow-sm">
@@ -462,8 +634,8 @@ function AccountPage() {
               Your data
             </h2>
             <p className="mb-4 text-sm text-muted-foreground">
-              Download everything NewPop holds about you — profile, bookings,
-              reviews, favourites, connections, reports, donations,
+              Download everything Social Circle holds about you — profile,
+              bookings, reviews, favourites, connections, reports, donations,
               notifications and messages — as a JSON file.
             </p>
             <button

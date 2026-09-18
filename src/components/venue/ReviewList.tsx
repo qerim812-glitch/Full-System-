@@ -3,9 +3,24 @@ import { Link } from "@tanstack/react-router";
 import { formatDate } from "../../lib/utils";
 import type { VenueReview } from "../../lib/venues";
 import { Avatar } from "../Avatar";
+import { ReportDialog } from "../ReportDialog";
 import { StarRating } from "../StarRating";
 
-export function ReviewList({ reviews }: { reviews: VenueReview[] }) {
+/**
+ * `myReviewId` identifies the caller's own review, which gets no report
+ * control. A member can only have one review per venue (the unique constraint
+ * on reviews), so that id is enough to recognise it without the route having
+ * to thread the current user id down here.
+ */
+export function ReviewList({
+  reviews,
+  venueSlug,
+  myReviewId,
+}: {
+  reviews: VenueReview[];
+  venueSlug: string;
+  myReviewId?: string | undefined;
+}) {
   if (reviews.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -48,12 +63,23 @@ export function ReviewList({ reviews }: { reviews: VenueReview[] }) {
               {review.comment}
             </p>
           ) : null}
-          <time
-            dateTime={review.created_at}
-            className="mt-1.5 block text-[11px] text-muted-foreground"
-          >
-            {formatDate(review.created_at)}
-          </time>
+          <div className="mt-1.5 flex items-center gap-3">
+            <time
+              dateTime={review.created_at}
+              className="block text-[11px] text-muted-foreground"
+            >
+              {formatDate(review.created_at)}
+            </time>
+            {review.id !== myReviewId ? (
+              <ReportDialog
+                compact
+                venueSlug={venueSlug}
+                reportedUserId={review.user_id}
+                targetKind="review"
+                targetId={review.id}
+              />
+            ) : null}
+          </div>
         </li>
       ))}
     </ul>

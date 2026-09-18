@@ -32,7 +32,7 @@ export const TIRANA_TZ = "Europe/Tirane";
  */
 export function safeRedirect(
   value: string | undefined | null,
-  fallback = "/venues",
+  fallback = "/feed",
 ): string {
   if (!value) return fallback;
   if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\"))
