@@ -6,15 +6,11 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { Bell, LogOut, Menu, Moon, Sun } from "lucide-react";
+import { Bell, LogOut, Moon, Sun } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetTitle,
-  SheetTrigger,
-} from "../components/ui/sheet";
+import { BottomNav } from "../components/BottomNav";
+import { Logo } from "../components/Logo";
 import { LanguageToggle } from "../components/LanguageToggle";
 import { useRealtime } from "../hooks/use-realtime";
 import { useT } from "../i18n";
@@ -121,7 +117,6 @@ function AuthedLayout() {
   const router = useRouter();
   const [dark, setDark] = useTheme();
   const { dmUnread, notificationsUnread } = useUnreadCounts();
-  const [sheetOpen, setSheetOpen] = useState(false);
 
   async function handleSignOut() {
     await signOut();
@@ -150,7 +145,7 @@ function AuthedLayout() {
             className="flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
             aria-label={t("nav.home")}
           >
-            Social Circle
+            <Logo markClassName="h-4 w-4" />
           </Link>
 
           <nav
@@ -210,88 +205,20 @@ function AuthedLayout() {
               <LogOut className="h-3.5 w-3.5" aria-hidden />
               {t("nav.signOut")}
             </button>
-
-            <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-              <SheetTrigger asChild>
-                <button
-                  type="button"
-                  aria-label={t("nav.openMenu")}
-                  className={cn(iconButton, "md:hidden")}
-                >
-                  <Menu className="h-4 w-4" aria-hidden />
-                  {dmUnread > 0 ? (
-                    <span
-                      className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-accent"
-                      aria-hidden
-                    />
-                  ) : null}
-                </button>
-              </SheetTrigger>
-              <SheetContent
-                side="right"
-                className="flex w-72 flex-col gap-0 p-0"
-              >
-                <div className="border-b border-border px-6 py-5">
-                  <SheetTitle className="text-base font-semibold text-foreground">
-                    Social Circle
-                  </SheetTitle>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {user.email}
-                  </p>
-                </div>
-                <nav
-                  className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-4"
-                  aria-label="Primary"
-                >
-                  {allNav.map((item) => (
-                    <Link
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setSheetOpen(false)}
-                      className="flex min-h-11 items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground [&.active]:bg-primary [&.active]:text-primary-foreground"
-                    >
-                      <span>{t(item.key)}</span>
-                      {item.to === "/messages" && dmUnread > 0 ? (
-                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-accent-foreground">
-                          {dmUnread}
-                        </span>
-                      ) : null}
-                    </Link>
-                  ))}
-                  <Link
-                    to="/notifications"
-                    onClick={() => setSheetOpen(false)}
-                    className="flex min-h-11 items-center justify-between rounded-xl px-4 py-3 text-sm font-medium text-muted-foreground transition-all hover:bg-muted hover:text-foreground [&.active]:bg-primary [&.active]:text-primary-foreground"
-                  >
-                    <span>Notifications</span>
-                    {notificationsUnread > 0 ? (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-bold text-accent-foreground">
-                        {notificationsUnread}
-                      </span>
-                    ) : null}
-                  </Link>
-                </nav>
-                <div className="border-t border-border px-4 py-4">
-                  <button
-                    type="button"
-                    onClick={() => void handleSignOut()}
-                    className="w-full rounded-full border border-border py-2 text-sm font-medium text-muted-foreground transition-all hover:border-foreground/20 hover:text-foreground"
-                  >
-                    Sign out
-                  </button>
-                </div>
-              </SheetContent>
-            </Sheet>
           </div>
         </div>
       </header>
 
       <main
         id="main"
-        className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6"
+        // pb-28 on phones keeps the last element clear of the fixed bottom
+        // bar; md: drops it because the bar is hidden there.
+        className="mx-auto w-full max-w-7xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-8 md:pt-8"
       >
         <Outlet />
       </main>
+
+      <BottomNav dmUnread={dmUnread} />
     </div>
   );
 }

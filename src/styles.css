@@ -46,6 +46,9 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-ring-offset-background: var(--background);
+  /* The logo dot. Fixed, not theme-dependent: a brand mark that
+     changes colour between light and dark is two brand marks. */
+  --color-brand: oklch(0.915 0.18 108);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

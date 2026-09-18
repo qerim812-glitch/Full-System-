@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { useT } from "../i18n";
+import { LogoMark } from "./Logo";
 
 /**
  * The public footer. Carries the policy links, which have to be reachable from
@@ -12,7 +13,10 @@ export function SiteFooter() {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-6 text-xs text-muted-foreground sm:px-6">
-        <span>© {new Date().getFullYear()} Social Circle · Tirana</span>
+        <span className="flex items-center gap-1.5">
+          <LogoMark className="h-3.5 w-3.5" />© {new Date().getFullYear()}{" "}
+          Social Circle · Tirana
+        </span>
         <nav className="flex flex-wrap items-center gap-x-5 gap-y-2">
           <Link
             to="/guidelines"

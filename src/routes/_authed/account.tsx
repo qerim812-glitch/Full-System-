@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 
+import { AccountLinks } from "../../components/AccountLinks";
 import { Avatar } from "../../components/Avatar";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import {
@@ -20,7 +21,7 @@ import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea";
-import { changePassword } from "../../lib/auth";
+import { changePassword, signOut } from "../../lib/auth";
 import { fetchMyBlocks, unblockUser } from "../../lib/messaging";
 import {
   INTERESTS,
@@ -81,6 +82,12 @@ function AccountPage() {
   // not merely rejected by the database after a round trip.
   const verifyInputRef = useRef<HTMLInputElement>(null);
   const [verifying, setVerifying] = useState(false);
+
+  async function handleSignOut() {
+    await signOut();
+    await router.invalidate();
+    await router.navigate({ to: "/login" });
+  }
 
   async function submitVerification(file: File) {
     setVerifying(true);
@@ -283,6 +290,10 @@ function AccountPage() {
           </>
         }
       />
+
+      {/* Phone only: the destinations the five-tab bottom bar cannot hold,
+          plus sign out. Without this they are unreachable on a phone. */}
+      <AccountLinks isAdmin={user.isAdmin} onSignOut={handleSignOut} />
 
       {!profile ? (
         <NoProfileCard onFixed={() => router.invalidate()} />

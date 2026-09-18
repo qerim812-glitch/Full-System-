@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
 import { POLICY_LAST_UPDATED, legalDetailsConfigured } from "../lib/legal";
+import { Logo } from "./Logo";
 import { SiteFooter } from "./SiteFooter";
 
 /**
@@ -27,7 +28,7 @@ export function LegalPage({
             to="/"
             className="flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
           >
-            Social Circle
+            <Logo markClassName="h-4 w-4" />
           </Link>
           <Link
             to="/login"

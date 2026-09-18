@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { useT } from "../i18n";
 import { LanguageToggle } from "./LanguageToggle";
+import { Logo } from "./Logo";
 
 /** Shared shell for the signed-out screens (login, register, reset). */
 export function AuthLayout({
@@ -22,8 +23,9 @@ export function AuthLayout({
           <LanguageToggle />
         </div>
         <div className="mb-8 flex flex-col items-center gap-4">
-          <div className="whitespace-nowrap rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground">
-            Social Circle · Tirana
+          <div className="flex items-center whitespace-nowrap rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground">
+            <Logo markClassName="h-4 w-4" />
+            <span className="ml-1.5 font-normal opacity-70">· Tirana</span>
           </div>
           <div className="text-center">
             <h1 className="text-3xl font-semibold tracking-tight text-foreground">

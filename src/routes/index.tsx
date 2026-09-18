@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { CalendarCheck, MessageCircle, ShieldCheck, Users } from "lucide-react";
 
 import { pillClass, primaryPillClass } from "../components/PageChrome";
+import { Logo } from "../components/Logo";
 import { SiteFooter } from "../components/SiteFooter";
 import { VenueCard } from "../components/VenueCard";
 import { fetchAuthUser } from "../lib/auth";
@@ -58,7 +59,7 @@ function LandingPage() {
     <div className="min-h-dvh bg-background">
       <header className="mx-auto flex w-full max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
         <span className="flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground">
-          Social Circle
+          <Logo markClassName="h-4 w-4" />
         </span>
         <nav className="flex items-center gap-2" aria-label="Account">
           <Link to="/login" className={pillClass()}>

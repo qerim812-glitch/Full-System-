@@ -85,7 +85,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     head: () => ({
       meta: [
         { charSet: "utf-8" },
-        { name: "viewport", content: "width=device-width, initial-scale=1" },
+        {
+          name: "viewport",
+          // viewport-fit=cover lets the bottom nav read
+          // env(safe-area-inset-bottom) and clear the iPhone home indicator.
+          content: "width=device-width, initial-scale=1, viewport-fit=cover",
+        },
         { title: "Social Circle · Book a table across Tirana" },
         {
           name: "description",
