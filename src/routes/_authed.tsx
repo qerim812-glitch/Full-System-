@@ -149,7 +149,7 @@ function AuthedLayout() {
           </Link>
 
           <nav
-            className="hidden flex-1 items-center gap-1.5 overflow-x-auto md:flex"
+            className="no-scrollbar hidden flex-1 items-center gap-1.5 overflow-x-auto md:flex"
             aria-label={t("nav.primary")}
           >
             {allNav.map((item) => (
