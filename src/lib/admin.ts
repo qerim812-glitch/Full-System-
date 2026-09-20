@@ -202,21 +202,51 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
 
     const reviewIds = idsOfKind("review");
     const chatIds = idsOfKind("chat_message");
+    const postIds = idsOfKind("post");
+    const postCommentIds = idsOfKind("post_comment");
 
-    const [reviewRows, chatRows] = await Promise.all([
-      reviewIds.length > 0
-        ? supabase.from("reviews").select("id, comment").in("id", reviewIds)
-        : Promise.resolve({ data: [], error: null }),
-      chatIds.length > 0
-        ? supabase.from("chat_messages").select("id, body").in("id", chatIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    const none = Promise.resolve({ data: [], error: null });
+    const [reviewRows, chatRows, postRows, postCommentRows] = await Promise.all(
+      [
+        reviewIds.length > 0
+          ? supabase.from("reviews").select("id, comment").in("id", reviewIds)
+          : none,
+        chatIds.length > 0
+          ? supabase.from("chat_messages").select("id, body").in("id", chatIds)
+          : none,
+        postIds.length > 0
+          ? supabase
+              .from("posts")
+              .select("id, body, photo_url")
+              .in("id", postIds)
+          : none,
+        postCommentIds.length > 0
+          ? supabase
+              .from("post_comments")
+              .select("id, body")
+              .in("id", postCommentIds)
+          : none,
+      ],
+    );
 
     const targetBodies = new Map<string, string | null>();
     for (const row of (reviewRows.data ?? []) as Record<string, unknown>[]) {
       targetBodies.set(row["id"] as string, (row["comment"] as string) ?? "");
     }
     for (const row of (chatRows.data ?? []) as Record<string, unknown>[]) {
+      targetBodies.set(row["id"] as string, (row["body"] as string) ?? "");
+    }
+    for (const row of (postRows.data ?? []) as Record<string, unknown>[]) {
+      const body = (row["body"] as string | null) ?? "";
+      targetBodies.set(
+        row["id"] as string,
+        row["photo_url"] ? `${body} [photo: ${row["photo_url"]}]`.trim() : body,
+      );
+    }
+    for (const row of (postCommentRows.data ?? []) as Record<
+      string,
+      unknown
+    >[]) {
       targetBodies.set(row["id"] as string, (row["body"] as string) ?? "");
     }
 
@@ -227,7 +257,11 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
       const venue = r.venue_slug ? venueMap.get(r.venue_slug) : undefined;
       const targetId = r["target_id"] as string | null;
       const targetKind = r["target_kind"] as string | null;
-      const hasBody = targetKind === "review" || targetKind === "chat_message";
+      const hasBody =
+        targetKind === "review" ||
+        targetKind === "chat_message" ||
+        targetKind === "post" ||
+        targetKind === "post_comment";
 
       return {
         ...r,
@@ -1023,16 +1057,19 @@ export const deleteLocation = createServerFn({ method: "POST" })
     return { ok: true as const, deactivated: false };
   });
 
-/* ── Content moderation (reviews + venue chat) ──────────────────────────── */
+/* ── Content moderation (reviews, venue chat, posts, comments) ──────────── */
+
+export type ModerationKind = "review" | "chat" | "post" | "post_comment";
 
 export type ModerationItem = {
-  kind: "review" | "chat";
+  kind: ModerationKind;
   id: string;
-  venue_slug: string;
+  venue_slug: string | null;
   venue_name: string | null;
   author_name: string | null;
   author_email: string | null;
   body: string | null;
+  photo_url: string | null;
   rating: number | null;
   is_hidden: boolean;
   created_at: string;
@@ -1057,26 +1094,45 @@ export const fetchModerationFeed = createServerFn({ method: "GET" })
       .select("id, venue_slug, user_id, body, is_hidden, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
+    let postsQ = supabase
+      .from("posts")
+      .select("id, venue_slug, user_id, body, photo_url, is_hidden, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
     if (data.venueSlug) {
       reviewsQ = reviewsQ.eq("venue_slug", data.venueSlug);
       chatQ = chatQ.eq("venue_slug", data.venueSlug);
+      postsQ = postsQ.eq("venue_slug", data.venueSlug);
     }
-    const [reviews, chat, venues] = await Promise.all([
+    const [reviews, chat, posts, comments, venues] = await Promise.all([
       reviewsQ,
       chatQ,
+      postsQ,
+      // Comments have no venue of their own, so a venue filter drops them.
+      data.venueSlug
+        ? Promise.resolve({ data: [], error: null })
+        : supabase
+            .from("post_comments")
+            .select("id, user_id, body, is_hidden, created_at")
+            .order("created_at", { ascending: false })
+            .limit(50),
       supabase.from("venues").select("slug, name"),
     ]);
     if (reviews.error)
       console.error("[admin] moderation reviews:", reviews.error.message);
     if (chat.error)
       console.error("[admin] moderation chat:", chat.error.message);
+    if (posts.error)
+      console.error("[admin] moderation posts:", posts.error.message);
+    if (comments.error)
+      console.error("[admin] moderation comments:", comments.error.message);
 
     const venueName = new Map(
       ((venues.data ?? []) as Array<{ slug: string; name: string }>).map(
         (v) => [v.slug, v.name],
       ),
     );
-    const rows: Array<Record<string, unknown> & { kind: "review" | "chat" }> = [
+    const rows: Array<Record<string, unknown> & { kind: ModerationKind }> = [
       ...((reviews.data ?? []) as Record<string, unknown>[]).map((r) => ({
         ...r,
         kind: "review" as const,
@@ -1084,6 +1140,14 @@ export const fetchModerationFeed = createServerFn({ method: "GET" })
       ...((chat.data ?? []) as Record<string, unknown>[]).map((r) => ({
         ...r,
         kind: "chat" as const,
+      })),
+      ...((posts.data ?? []) as Record<string, unknown>[]).map((r) => ({
+        ...r,
+        kind: "post" as const,
+      })),
+      ...((comments.data ?? []) as Record<string, unknown>[]).map((r) => ({
+        ...r,
+        kind: "post_comment" as const,
       })),
     ];
     const userIds = [...new Set(rows.map((r) => r["user_id"] as string))];
@@ -1106,12 +1170,15 @@ export const fetchModerationFeed = createServerFn({ method: "GET" })
         return {
           kind: r.kind,
           id: String(r["id"]),
-          venue_slug: r["venue_slug"] as string,
-          venue_name: venueName.get(r["venue_slug"] as string) ?? null,
+          venue_slug: (r["venue_slug"] as string | null) ?? null,
+          venue_name: r["venue_slug"]
+            ? (venueName.get(r["venue_slug"] as string) ?? null)
+            : null,
           author_name: (p?.["display_name"] as string | null) ?? null,
           author_email: (p?.["email"] as string | null) ?? null,
           body: (r.kind === "review" ? r["comment"] : r["body"]) as
             string | null,
+          photo_url: (r["photo_url"] as string | null) ?? null,
           rating: r.kind === "review" ? (r["rating"] as number) : null,
           is_hidden: r["is_hidden"] as boolean,
           created_at: r["created_at"] as string,
@@ -1122,18 +1189,25 @@ export const fetchModerationFeed = createServerFn({ method: "GET" })
   });
 
 const hideSchema = z.object({
-  kind: z.enum(["review", "chat"]),
+  kind: z.enum(["review", "chat", "post", "post_comment"]),
   id: z.string().min(1),
   hidden: z.boolean(),
 });
 
-/** Hide or restore a review / chat message. Uses the admin FOR ALL policies. */
+const HIDE_TABLES = {
+  review: "reviews",
+  chat: "chat_messages",
+  post: "posts",
+  post_comment: "post_comments",
+} as const;
+
+/** Hide or restore a review / chat message / post / comment. Uses the admin FOR ALL policies. */
 export const setContentHidden = createServerFn({ method: "POST" })
   .validator((data: unknown) => hideSchema.parse(data))
   .handler(async ({ data }) => {
     const admin = await requireAdmin();
     const supabase = getSupabaseServerClient();
-    const table = data.kind === "review" ? "reviews" : "chat_messages";
+    const table = HIDE_TABLES[data.kind];
     const { data: rows, error } = await supabase
       .from(table)
       .update({ is_hidden: data.hidden })

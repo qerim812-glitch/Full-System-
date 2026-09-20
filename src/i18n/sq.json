@@ -18,6 +18,7 @@
   "nav.notifications": "Njoftimet",
   "nav.notificationsUnread": "Njoftimet, {{count}} të palexuara",
   "nav.more": "Më shumë",
+  "nav.create": "Krijo",
   "nav.unreadCount": "{{count}} të palexuara",
   "nav.messagesUnread": "Mesazhet, {{count}} të palexuara",
   "theme.toLight": "Kalo në modalitetin e ndritshëm",

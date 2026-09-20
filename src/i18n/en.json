@@ -18,6 +18,7 @@
   "nav.notifications": "Notifications",
   "nav.notificationsUnread": "Notifications, {{count}} unread",
   "nav.more": "More",
+  "nav.create": "Create",
   "nav.unreadCount": "{{count}} unread",
   "nav.messagesUnread": "Messages, {{count}} unread",
   "theme.toLight": "Switch to light mode",

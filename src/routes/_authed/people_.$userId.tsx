@@ -15,7 +15,9 @@ import { StarRating } from "../../components/StarRating";
 import { StatChip } from "../../components/StatChip";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { blockUser, unblockUser } from "../../lib/messaging";
+import { PostFeed } from "../../components/post/PostFeed";
 import { fetchMemberProfile } from "../../lib/people";
+import { fetchPosts } from "../../lib/posts";
 import { fetchMyProfile, interestLabel } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
 import {
@@ -27,11 +29,12 @@ import { formatDate } from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/people_/$userId")({
   loader: async ({ params }) => {
-    const [member, me] = await Promise.all([
+    const [member, me, posts] = await Promise.all([
       fetchMemberProfile({ data: { userId: params.userId } }),
       fetchMyProfile(),
+      fetchPosts({ data: { scope: "user", userId: params.userId } }),
     ]);
-    return { member, myInterests: me?.interests ?? [] };
+    return { member, myInterests: me?.interests ?? [], posts };
   },
   head: ({ loaderData }) =>
     pageHead(
@@ -50,7 +53,7 @@ export const Route = createFileRoute("/_authed/people_/$userId")({
 });
 
 function MemberPage() {
-  const { member, myInterests } = Route.useLoaderData();
+  const { member, myInterests, posts } = Route.useLoaderData();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
@@ -382,6 +385,21 @@ function MemberPage() {
           )}
         </section>
       </div>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Posts
+        </h2>
+        <div className="mx-auto w-full max-w-xl">
+          <PostFeed
+            initial={posts}
+            scope="user"
+            userId={member.profile.id}
+            emptyTitle="No posts yet"
+            emptyBody="Nothing shared here so far."
+          />
+        </div>
+      </section>
     </div>
   );
 }

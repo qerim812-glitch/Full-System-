@@ -114,10 +114,18 @@ export function ModerationPanel({ venues }: { venues: AdminVenue[] }) {
                   <span className="rounded-full bg-muted px-2 py-0.5 font-semibold capitalize">
                     {item.kind === "review"
                       ? `Review · ${item.rating}/5`
-                      : "Chat"}
+                      : item.kind === "chat"
+                        ? "Chat"
+                        : item.kind === "post"
+                          ? "Post"
+                          : "Comment"}
                   </span>
-                  <span>{item.venue_name ?? item.venue_slug}</span>
-                  <span>·</span>
+                  {item.venue_slug ? (
+                    <>
+                      <span>{item.venue_name ?? item.venue_slug}</span>
+                      <span>·</span>
+                    </>
+                  ) : null}
                   <span>
                     {item.author_name ?? item.author_email ?? "unknown"}
                   </span>
@@ -138,6 +146,14 @@ export function ModerationPanel({ venues }: { venues: AdminVenue[] }) {
                     </span>
                   )}
                 </p>
+                {item.photo_url ? (
+                  <img
+                    src={item.photo_url}
+                    alt=""
+                    loading="lazy"
+                    className="mt-1 max-h-40 w-auto rounded-xl object-cover"
+                  />
+                ) : null}
               </div>
               <button
                 type="button"

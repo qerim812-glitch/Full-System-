@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Clock, MapPin, Phone } from "lucide-react";
 import { useId, useState } from "react";
 
@@ -18,7 +18,9 @@ import { VenueChat } from "../../components/VenueChat";
 import { BookingForm } from "../../components/venue/BookingForm";
 import { ReviewList } from "../../components/venue/ReviewList";
 import { SocialFeedPanel } from "../../components/venue/SocialFeedPanel";
+import { PostFeed } from "../../components/post/PostFeed";
 import { fetchMyFavorites } from "../../lib/favorites";
+import { fetchPosts } from "../../lib/posts";
 import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
 import { pageHead } from "../../lib/seo";
 import { formatHours } from "../../lib/slots";
@@ -27,20 +29,29 @@ import { todayInTirana } from "../../lib/utils";
 import { categoryLabel, priceBandLabel } from "../../lib/venue-filters";
 import { fetchVenue } from "../../lib/venues";
 
-type Tab = "overview" | "reviews" | "chat" | "going";
+type Tab = "overview" | "reviews" | "chat" | "going" | "posts";
 
 export const Route = createFileRoute("/_authed/venues_/$slug")({
   loader: async ({ params }) => {
     const today = todayInTirana();
-    const [detail, favorites, myReview, canReview, myCheckin] =
+    const [detail, favorites, myReview, canReview, myCheckin, posts] =
       await Promise.all([
         fetchVenue({ data: { slug: params.slug } }),
         fetchMyFavorites(),
         fetchMyReview({ data: { venueSlug: params.slug } }),
         canReviewVenue({ data: { venueSlug: params.slug } }),
         fetchMyCheckin({ data: { venueSlug: params.slug, date: today } }),
+        fetchPosts({ data: { scope: "venue", venueSlug: params.slug } }),
       ]);
-    return { detail, favorites, myReview, canReview, myCheckin, today };
+    return {
+      detail,
+      favorites,
+      myReview,
+      canReview,
+      myCheckin,
+      today,
+      posts,
+    };
   },
   head: ({ loaderData }) => {
     const venue = loaderData?.detail?.venue;
@@ -88,7 +99,7 @@ function VenueDetailSkeleton() {
 }
 
 function VenueDetailPage() {
-  const { detail, favorites, myReview, canReview, myCheckin, today } =
+  const { detail, favorites, myReview, canReview, myCheckin, today, posts } =
     Route.useLoaderData();
   const [date, setDate] = useState(today);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
@@ -112,6 +123,7 @@ function VenueDetailPage() {
     { id: "reviews" as const, label: "Reviews", badge: reviewCount },
     { id: "chat" as const, label: "Chat" },
     { id: "going" as const, label: "Who's going" },
+    { id: "posts" as const, label: "Posts", badge: posts.posts.length },
   ];
 
   return (
@@ -318,6 +330,30 @@ function VenueDetailPage() {
           {activeTab === "chat" ? (
             <div {...tabPanelProps(tabsId, "chat")}>
               <VenueChat venueSlug={venue.slug} />
+            </div>
+          ) : null}
+
+          {activeTab === "posts" ? (
+            <div
+              {...tabPanelProps(tabsId, "posts")}
+              className="flex flex-col gap-4"
+            >
+              <div className="flex justify-end">
+                <Link
+                  to="/new"
+                  search={{ venue: venue.slug }}
+                  className={pillClass("text-xs")}
+                >
+                  Post from here
+                </Link>
+              </div>
+              <PostFeed
+                initial={posts}
+                scope="venue"
+                venueSlug={venue.slug}
+                emptyTitle="No posts from here yet"
+                emptyBody="Check in or share a photo and it shows up on this page."
+              />
             </div>
           ) : null}
 

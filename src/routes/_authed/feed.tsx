@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { MapPin, Sparkles, UserPlus } from "lucide-react";
+import { MapPin, SquarePlus, Sparkles, UserPlus } from "lucide-react";
+import { useState } from "react";
 
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
@@ -12,20 +13,26 @@ import {
 import { StatChip } from "../../components/StatChip";
 import { StatChipSkeleton } from "../../components/Skeletons";
 import { MeetupCard } from "../../components/meetup/MeetupCard";
+import { PostFeed } from "../../components/post/PostFeed";
+import { StoriesRow } from "../../components/post/StoriesRow";
 import { VerifiedBadge } from "../../components/VerifiedBadge";
 import { fetchFeed } from "../../lib/feed";
 import { fetchMeetups } from "../../lib/meetups";
+import { fetchPosts, fetchStories } from "../../lib/posts";
 import { interestLabel } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
 import { formatBookingDate } from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/feed")({
   loader: async () => {
-    const [feed, meetups] = await Promise.all([
+    const [feed, meetups, posts, connectionPosts, stories] = await Promise.all([
       fetchFeed(),
       fetchMeetups({ data: { scope: "upcoming" } }),
+      fetchPosts({ data: { scope: "all" } }),
+      fetchPosts({ data: { scope: "connections" } }),
+      fetchStories(),
     ]);
-    return { feed, meetups };
+    return { feed, meetups, posts, connectionPosts, stories };
   },
   head: () =>
     pageHead("Tonight", "What's happening in Tirana and who's going out."),
@@ -42,7 +49,9 @@ export const Route = createFileRoute("/_authed/feed")({
 });
 
 function FeedPage() {
-  const { feed, meetups } = Route.useLoaderData();
+  const { feed, meetups, posts, connectionPosts, stories } =
+    Route.useLoaderData();
+  const [postScope, setPostScope] = useState<"all" | "connections">("all");
 
   const tonight = meetups.filter((m) => m.meet_date === feed.today);
   const later = meetups.filter((m) => m.meet_date > feed.today).slice(0, 4);
@@ -52,6 +61,7 @@ function FeedPage() {
 
   const nothingAtAll =
     meetups.length === 0 &&
+    posts.posts.length === 0 &&
     feed.connectionCheckins.length === 0 &&
     feed.suggested.length === 0;
 
@@ -60,7 +70,15 @@ function FeedPage() {
       <PageHeader
         title="Tonight in Tirana"
         subtitle="Meetups you can join, where your connections are going, and people worth knowing."
+        actions={
+          <Link to="/new" className={primaryPillClass("gap-1.5")}>
+            <SquarePlus className="h-4 w-4" aria-hidden />
+            New post
+          </Link>
+        }
       />
+
+      <StoriesRow groups={stories} />
 
       <div className="flex flex-wrap gap-4">
         <StatChip
@@ -92,6 +110,57 @@ function FeedPage() {
           </ul>
         </section>
       ) : null}
+
+      <section className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-foreground">Posts</h2>
+          <div
+            role="group"
+            aria-label="Show posts from"
+            className="flex gap-0.5 rounded-full border border-border bg-card p-0.5"
+          >
+            {(
+              [
+                ["all", "Everyone"],
+                ["connections", "Connections"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={postScope === value}
+                onClick={() => setPostScope(value)}
+                className={
+                  postScope === value
+                    ? "rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground"
+                    : "rounded-full px-3 py-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                }
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mx-auto w-full max-w-xl">
+          {postScope === "all" ? (
+            <PostFeed
+              key="all"
+              initial={posts}
+              scope="all"
+              emptyTitle="No posts yet"
+              emptyBody="Be the first to say where you're heading tonight."
+            />
+          ) : (
+            <PostFeed
+              key="connections"
+              initial={connectionPosts}
+              scope="connections"
+              emptyTitle="Nothing from your connections yet"
+              emptyBody="Connect with people and their posts and check-ins show up here."
+            />
+          )}
+        </div>
+      </section>
 
       {feed.connectionCheckins.length > 0 ? (
         <section className="flex flex-col gap-3">

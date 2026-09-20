@@ -7,6 +7,7 @@ import {
   Moon,
   Shield,
   Sun,
+  Users,
 } from "lucide-react";
 
 import { useTheme } from "../hooks/use-theme";
@@ -24,6 +25,7 @@ import { LanguageToggle } from "./LanguageToggle";
  * Shown only below `md`; on wider screens the sidebar already has them.
  */
 const LINKS = [
+  { to: "/people", key: "nav.people", Icon: Users },
   { to: "/bookings", key: "nav.bookings", Icon: CalendarDays },
   { to: "/favourites", key: "nav.favourites", Icon: Heart },
 ] as const;

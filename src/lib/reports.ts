@@ -29,6 +29,8 @@ export const REPORT_TARGET_KINDS = [
   "review",
   "profile",
   "venue",
+  "post",
+  "post_comment",
 ] as const;
 
 export type ReportTargetKind = (typeof REPORT_TARGET_KINDS)[number];
@@ -38,6 +40,8 @@ const CONTENT_TARGET_KINDS: readonly ReportTargetKind[] = [
   "chat_message",
   "direct_message",
   "review",
+  "post",
+  "post_comment",
 ];
 
 /**

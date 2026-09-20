@@ -27,6 +27,7 @@ import { Route as AuthedFavouritesRouteImport } from './routes/_authed/favourite
 import { Route as AuthedFeedRouteImport } from './routes/_authed/feed'
 import { Route as AuthedMeetupsRouteImport } from './routes/_authed/meetups'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
+import { Route as AuthedNewRouteImport } from './routes/_authed/new'
 import { Route as AuthedNotificationsRouteImport } from './routes/_authed/notifications'
 import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
 import { Route as AuthedResetPasswordRouteImport } from './routes/_authed/reset-password'
@@ -37,6 +38,7 @@ import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthedMeetupsMeetupIdRouteImport } from './routes/_authed/meetups_.$meetupId'
 import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
 import { Route as AuthedPeopleUserIdRouteImport } from './routes/_authed/people_.$userId'
+import { Route as AuthedPostsPostIdRouteImport } from './routes/_authed/posts_.$postId'
 import { Route as AuthedVenuesSlugRouteImport } from './routes/_authed/venues_.$slug'
 
 const IndexRoute = IndexRouteImport.update({
@@ -128,6 +130,11 @@ const AuthedMessagesRoute = AuthedMessagesRouteImport.update({
   path: '/messages',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedNewRoute = AuthedNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedNotificationsRoute = AuthedNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
@@ -178,6 +185,11 @@ const AuthedPeopleUserIdRoute = AuthedPeopleUserIdRouteImport.update({
   path: '/people/$userId',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedPostsPostIdRoute = AuthedPostsPostIdRouteImport.update({
+  id: '/posts_/$postId',
+  path: '/posts/$postId',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedVenuesSlugRoute = AuthedVenuesSlugRouteImport.update({
   id: '/venues_/$slug',
   path: '/venues/$slug',
@@ -202,6 +214,7 @@ export interface FileRoutesByFullPath {
   '/feed': typeof AuthedFeedRoute
   '/meetups': typeof AuthedMeetupsRoute
   '/messages': typeof AuthedMessagesRoute
+  '/new': typeof AuthedNewRoute
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
@@ -212,6 +225,7 @@ export interface FileRoutesByFullPath {
   '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/people/$userId': typeof AuthedPeopleUserIdRoute
+  '/posts/$postId': typeof AuthedPostsPostIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesByTo {
@@ -232,6 +246,7 @@ export interface FileRoutesByTo {
   '/feed': typeof AuthedFeedRoute
   '/meetups': typeof AuthedMeetupsRoute
   '/messages': typeof AuthedMessagesRoute
+  '/new': typeof AuthedNewRoute
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
@@ -242,6 +257,7 @@ export interface FileRoutesByTo {
   '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
   '/people/$userId': typeof AuthedPeopleUserIdRoute
+  '/posts/$postId': typeof AuthedPostsPostIdRoute
   '/venues/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRoutesById {
@@ -264,6 +280,7 @@ export interface FileRoutesById {
   '/_authed/feed': typeof AuthedFeedRoute
   '/_authed/meetups': typeof AuthedMeetupsRoute
   '/_authed/messages': typeof AuthedMessagesRoute
+  '/_authed/new': typeof AuthedNewRoute
   '/_authed/notifications': typeof AuthedNotificationsRoute
   '/_authed/people': typeof AuthedPeopleRoute
   '/_authed/reset-password': typeof AuthedResetPasswordRoute
@@ -274,6 +291,7 @@ export interface FileRoutesById {
   '/_authed/meetups_/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
   '/_authed/people_/$userId': typeof AuthedPeopleUserIdRoute
+  '/_authed/posts_/$postId': typeof AuthedPostsPostIdRoute
   '/_authed/venues_/$slug': typeof AuthedVenuesSlugRoute
 }
 export interface FileRouteTypes {
@@ -296,6 +314,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/meetups'
     | '/messages'
+    | '/new'
     | '/notifications'
     | '/people'
     | '/reset-password'
@@ -306,6 +325,7 @@ export interface FileRouteTypes {
     | '/meetups/$meetupId'
     | '/messages/$userId'
     | '/people/$userId'
+    | '/posts/$postId'
     | '/venues/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -326,6 +346,7 @@ export interface FileRouteTypes {
     | '/feed'
     | '/meetups'
     | '/messages'
+    | '/new'
     | '/notifications'
     | '/people'
     | '/reset-password'
@@ -336,6 +357,7 @@ export interface FileRouteTypes {
     | '/meetups/$meetupId'
     | '/messages/$userId'
     | '/people/$userId'
+    | '/posts/$postId'
     | '/venues/$slug'
   id:
     | '__root__'
@@ -357,6 +379,7 @@ export interface FileRouteTypes {
     | '/_authed/feed'
     | '/_authed/meetups'
     | '/_authed/messages'
+    | '/_authed/new'
     | '/_authed/notifications'
     | '/_authed/people'
     | '/_authed/reset-password'
@@ -367,6 +390,7 @@ export interface FileRouteTypes {
     | '/_authed/meetups_/$meetupId'
     | '/_authed/messages_/$userId'
     | '/_authed/people_/$userId'
+    | '/_authed/posts_/$postId'
     | '/_authed/venues_/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -514,6 +538,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedMessagesRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/new': {
+      id: '/_authed/new'
+      path: '/new'
+      fullPath: '/new'
+      preLoaderRoute: typeof AuthedNewRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/notifications': {
       id: '/_authed/notifications'
       path: '/notifications'
@@ -584,6 +615,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedPeopleUserIdRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/posts_/$postId': {
+      id: '/_authed/posts_/$postId'
+      path: '/posts/$postId'
+      fullPath: '/posts/$postId'
+      preLoaderRoute: typeof AuthedPostsPostIdRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/venues_/$slug': {
       id: '/_authed/venues_/$slug'
       path: '/venues/$slug'
@@ -603,6 +641,7 @@ interface AuthedRouteChildren {
   AuthedFeedRoute: typeof AuthedFeedRoute
   AuthedMeetupsRoute: typeof AuthedMeetupsRoute
   AuthedMessagesRoute: typeof AuthedMessagesRoute
+  AuthedNewRoute: typeof AuthedNewRoute
   AuthedNotificationsRoute: typeof AuthedNotificationsRoute
   AuthedPeopleRoute: typeof AuthedPeopleRoute
   AuthedResetPasswordRoute: typeof AuthedResetPasswordRoute
@@ -610,6 +649,7 @@ interface AuthedRouteChildren {
   AuthedMeetupsMeetupIdRoute: typeof AuthedMeetupsMeetupIdRoute
   AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
   AuthedPeopleUserIdRoute: typeof AuthedPeopleUserIdRoute
+  AuthedPostsPostIdRoute: typeof AuthedPostsPostIdRoute
   AuthedVenuesSlugRoute: typeof AuthedVenuesSlugRoute
 }
 
@@ -622,6 +662,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedFeedRoute: AuthedFeedRoute,
   AuthedMeetupsRoute: AuthedMeetupsRoute,
   AuthedMessagesRoute: AuthedMessagesRoute,
+  AuthedNewRoute: AuthedNewRoute,
   AuthedNotificationsRoute: AuthedNotificationsRoute,
   AuthedPeopleRoute: AuthedPeopleRoute,
   AuthedResetPasswordRoute: AuthedResetPasswordRoute,
@@ -629,6 +670,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedMeetupsMeetupIdRoute: AuthedMeetupsMeetupIdRoute,
   AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
   AuthedPeopleUserIdRoute: AuthedPeopleUserIdRoute,
+  AuthedPostsPostIdRoute: AuthedPostsPostIdRoute,
   AuthedVenuesSlugRoute: AuthedVenuesSlugRoute,
 }
 

@@ -38,7 +38,7 @@ export function RouteError({
 }: {
   title: string;
   body?: string;
-  backTo?: "/venues" | "/bookings" | "/messages" | "/people" | "/meetups";
+  backTo?: BackTarget;
   backLabel?: string;
 }) {
   return (
@@ -54,12 +54,16 @@ export function RouteError({
   );
 }
 
+/** Where a back link or an error fallback may send someone. */
+export type BackTarget =
+  "/feed" | "/venues" | "/messages" | "/people" | "/bookings" | "/meetups";
+
 /** Pill-shaped back link ("← All venues"). */
 export function BackLink({
   to,
   children,
 }: {
-  to: "/venues" | "/messages" | "/people" | "/bookings" | "/meetups";
+  to: BackTarget;
   children: ReactNode;
 }) {
   return (

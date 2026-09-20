@@ -9,6 +9,7 @@ import {
   MessageCircle,
   Search,
   Shield,
+  SquarePlus,
   Users,
 } from "lucide-react";
 
@@ -29,6 +30,7 @@ export type NavItem = {
     | "/messages"
     | "/notifications"
     | "/donate"
+    | "/new"
     | "/admin";
   key: string;
   Icon: LucideIcon;
@@ -41,6 +43,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: "/feed", key: "nav.feed", Icon: House },
   { to: "/venues", key: "nav.venues", Icon: Search },
   { to: "/meetups", key: "nav.meetups", Icon: CalendarCheck },
+  { to: "/new", key: "nav.create", Icon: SquarePlus },
   { to: "/people", key: "nav.people", Icon: Users },
   { to: "/messages", key: "nav.messages", Icon: MessageCircle, badge: "dm" },
   {
@@ -62,11 +65,11 @@ export const ADMIN_ITEM: NavItem = {
 
 /**
  * The four that earn a slot in the phone bottom bar (the fifth is the
- * profile avatar). Messages and notifications live in the phone top bar
- * instead, the way Instagram does it.
+ * profile avatar), with Create in the middle the way Instagram does it.
+ * Messages, notifications and search live in the phone top bar instead.
  */
-export const BOTTOM_ITEMS = NAV_ITEMS.filter((item) =>
-  ["/feed", "/venues", "/meetups", "/people"].includes(item.to),
+export const BOTTOM_ITEMS = ["/feed", "/venues", "/new", "/meetups"].map((to) =>
+  NAV_ITEMS.find((item) => item.to === to)!,
 );
 
 /** Cap shown in a badge; anything larger reads as "a lot" anyway. */
