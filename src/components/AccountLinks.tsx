@@ -1,33 +1,31 @@
 import { Link } from "@tanstack/react-router";
 import {
-  Bell,
   CalendarDays,
   ChevronRight,
   Heart,
   LogOut,
+  Moon,
   Shield,
-  Users,
+  Sun,
 } from "lucide-react";
 
+import { useTheme } from "../hooks/use-theme";
 import { useT } from "../i18n";
 import { LanguageToggle } from "./LanguageToggle";
 
 /**
- * The destinations that do not fit in the five-tab bottom bar.
+ * The destinations that do not fit in the phone nav.
  *
- * The bottom bar replaced a slide-out menu, and a bar holds five targets at
- * 320px before they stop being tappable. Everything the menu used to carry —
- * bookings, favourites, people, notifications, donate, admin, and sign out —
- * lives here instead, on the Account tab. Without this they would simply be
- * unreachable on a phone.
+ * The bottom bar holds four sections plus the profile, and the top bar holds
+ * notifications and messages. Everything else — bookings, favourites, donate,
+ * admin, theme, language, and sign out — lives here, on the Account tab.
+ * Without this they would simply be unreachable on a phone.
  *
- * Shown only below `md`; on wider screens the header nav already has them.
+ * Shown only below `md`; on wider screens the sidebar already has them.
  */
 const LINKS = [
   { to: "/bookings", key: "nav.bookings", Icon: CalendarDays },
   { to: "/favourites", key: "nav.favourites", Icon: Heart },
-  { to: "/people", key: "nav.people", Icon: Users },
-  { to: "/notifications", key: "nav.notifications", Icon: Bell },
 ] as const;
 
 export function AccountLinks({
@@ -38,6 +36,7 @@ export function AccountLinks({
   onSignOut: () => void | Promise<void>;
 }) {
   const t = useT();
+  const [dark, setDark] = useTheme();
 
   return (
     <section className="flex flex-col gap-3 md:hidden">
@@ -104,9 +103,32 @@ export function AccountLinks({
         </ul>
       </nav>
 
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-border bg-card px-5 py-3 shadow-sm">
-        <span className="text-sm text-foreground">{t("language.label")}</span>
-        <LanguageToggle />
+      <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="flex min-h-14 items-center justify-between gap-3 px-5 py-3">
+          <span className="text-sm text-foreground">{t("language.label")}</span>
+          <LanguageToggle />
+        </div>
+        <button
+          type="button"
+          onClick={() => setDark(!dark)}
+          aria-pressed={dark}
+          className="flex min-h-14 w-full items-center gap-3 border-t border-border px-5 py-3.5 text-sm text-foreground transition-colors active:bg-muted"
+        >
+          {dark ? (
+            <Sun
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          ) : (
+            <Moon
+              className="h-4 w-4 shrink-0 text-muted-foreground"
+              aria-hidden
+            />
+          )}
+          <span className="flex-1 text-left">
+            {dark ? t("theme.toLight") : t("theme.toDark")}
+          </span>
+        </button>
       </div>
 
       <button

@@ -6,17 +6,18 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { Bell, LogOut, Moon, Sun } from "lucide-react";
+import { Bell, MessageCircle } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { BottomNav } from "../components/BottomNav";
 import { Logo } from "../components/Logo";
-import { LanguageToggle } from "../components/LanguageToggle";
+import { NavBadge } from "../components/NavBadge";
+import { SIDENAV_OFFSET, SideNav } from "../components/SideNav";
 import { useRealtime } from "../hooks/use-realtime";
 import { useT } from "../i18n";
-import { useTheme } from "../hooks/use-theme";
 import { fetchAuthUser, signOut } from "../lib/auth";
 import { fetchUnreadCounts, type UnreadCounts } from "../lib/notifications";
+import { fetchMyProfile } from "../lib/profile";
 import { cn } from "../lib/utils";
 
 export const Route = createFileRoute("/_authed")({
@@ -27,22 +28,20 @@ export const Route = createFileRoute("/_authed")({
     }
     return { user };
   },
+  // The nav shows the member's avatar as the profile tab. Loaded once here
+  // rather than on every page; `staleTime` keeps it from refetching on each
+  // navigation, and the Account page's `router.invalidate()` after an avatar
+  // change refreshes it at once.
+  loader: async () => {
+    const profile = await fetchMyProfile();
+    return {
+      profileName: profile?.display_name ?? null,
+      profileAvatarUrl: profile?.avatar_url ?? null,
+    };
+  },
+  staleTime: 5 * 60_000,
   component: AuthedLayout,
 });
-
-// Labels are translation keys, resolved at render — a literal here would
-// bake English into the nav whatever the locale says.
-const NAV = [
-  { to: "/feed", key: "nav.feed" },
-  { to: "/venues", key: "nav.venues" },
-  { to: "/meetups", key: "nav.meetups" },
-  { to: "/favourites", key: "nav.favourites" },
-  { to: "/bookings", key: "nav.bookings" },
-  { to: "/people", key: "nav.people" },
-  { to: "/messages", key: "nav.messages" },
-  { to: "/donate", key: "nav.donate" },
-  { to: "/account", key: "nav.account" },
-] as const;
 
 const POLL_MS = 30_000;
 
@@ -92,30 +91,14 @@ function useUnreadCounts(): UnreadCounts {
   return counts;
 }
 
-const pillNav =
-  "relative inline-flex min-h-9 items-center whitespace-nowrap rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring [&.active]:border-transparent [&.active]:bg-primary [&.active]:text-primary-foreground [&.active]:shadow-none";
-const iconButton =
-  "relative flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
-
-function Badge({ count, className }: { count: number; className?: string }) {
-  if (count <= 0) return null;
-  return (
-    <span
-      className={cn(
-        "absolute -right-1 -top-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-bold text-accent-foreground",
-        className,
-      )}
-    >
-      {count > 99 ? "99+" : count}
-    </span>
-  );
-}
+const topIcon =
+  "relative flex h-11 w-11 items-center justify-center rounded-full text-foreground transition-transform active:scale-90 [&.active_svg]:stroke-[2.5]";
 
 function AuthedLayout() {
   const { user } = Route.useRouteContext();
+  const { profileName, profileAvatarUrl } = Route.useLoaderData();
   const t = useT();
   const router = useRouter();
-  const [dark, setDark] = useTheme();
   const { dmUnread, notificationsUnread } = useUnreadCounts();
 
   async function handleSignOut() {
@@ -124,13 +107,10 @@ function AuthedLayout() {
     await router.navigate({ to: "/login" });
   }
 
-  const allNav = [
-    ...NAV,
-    ...(user.isAdmin ? [{ to: "/admin" as const, key: "nav.admin" }] : []),
-  ];
+  const name = profileName ?? user.email;
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
+    <div className="min-h-dvh bg-background">
       <a
         href="#main"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-full focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground"
@@ -138,87 +118,80 @@ function AuthedLayout() {
         {t("nav.skip")}
       </a>
 
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-sm">
-        <div className="mx-auto flex w-full max-w-7xl items-center gap-4 px-4 py-4 sm:px-6">
-          <Link
-            to="/feed"
-            className="flex h-9 shrink-0 items-center whitespace-nowrap rounded-full bg-primary px-4 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            aria-label={t("nav.home")}
-          >
-            <Logo markClassName="h-4 w-4" />
-          </Link>
+      {/* Desktop: fixed left rail with every destination, profile and More. */}
+      <SideNav
+        dmUnread={dmUnread}
+        notificationsUnread={notificationsUnread}
+        isAdmin={user.isAdmin}
+        profileName={name}
+        profileAvatarUrl={profileAvatarUrl}
+        onSignOut={handleSignOut}
+      />
 
-          <nav
-            className="no-scrollbar hidden flex-1 items-center gap-1.5 overflow-x-auto md:flex"
-            aria-label={t("nav.primary")}
-          >
-            {allNav.map((item) => (
-              <Link key={item.to} to={item.to} className={pillNav}>
-                {t(item.key)}
-                {item.to === "/messages" ? <Badge count={dmUnread} /> : null}
-              </Link>
-            ))}
-          </nav>
-
-          <div className="ml-auto flex shrink-0 items-center gap-2">
+      <div className={cn("flex min-h-dvh flex-col", SIDENAV_OFFSET)}>
+        {/* Phone: slim top bar — wordmark left, notifications and messages
+            right, the way Instagram lays it out. The sections themselves are
+            in the bottom bar. */}
+        <header className="sticky top-0 z-30 border-b border-border bg-background/90 backdrop-blur-sm md:hidden">
+          <div className="mx-auto flex h-14 w-full max-w-lg items-center justify-between pl-4 pr-2">
             <Link
-              to="/notifications"
-              className={cn(
-                iconButton,
-                "[&.active]:border-transparent [&.active]:bg-primary [&.active]:text-primary-foreground",
-              )}
-              aria-label={
-                notificationsUnread > 0
-                  ? t("nav.notificationsUnread", { count: notificationsUnread })
-                  : t("nav.notifications")
-              }
+              to="/feed"
+              className="flex items-center text-foreground"
+              aria-label={t("nav.home")}
             >
-              <Bell className="h-4 w-4" aria-hidden />
-              <Badge count={notificationsUnread} />
+              <Logo
+                markClassName="h-6 w-6"
+                className="text-lg font-semibold tracking-tight"
+              />
             </Link>
 
-            <button
-              type="button"
-              onClick={() => setDark(!dark)}
-              aria-label={dark ? t("theme.toLight") : t("theme.toDark")}
-              aria-pressed={dark}
-              className={iconButton}
-            >
-              {dark ? (
-                <Sun className="h-4 w-4" aria-hidden />
-              ) : (
-                <Moon className="h-4 w-4" aria-hidden />
-              )}
-            </button>
-
-            <LanguageToggle className="hidden sm:flex" />
-
-            <span className="hidden max-w-[10rem] truncate text-xs text-muted-foreground lg:inline">
-              {user.email}
-            </span>
-
-            <button
-              type="button"
-              onClick={() => void handleSignOut()}
-              className="hidden min-h-9 items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm transition-all hover:border-foreground/20 hover:text-foreground md:flex"
-            >
-              <LogOut className="h-3.5 w-3.5" aria-hidden />
-              {t("nav.signOut")}
-            </button>
+            <div className="flex items-center">
+              <Link
+                to="/notifications"
+                className={topIcon}
+                activeOptions={{ exact: false }}
+                aria-label={
+                  notificationsUnread > 0
+                    ? t("nav.notificationsUnread", {
+                        count: notificationsUnread,
+                      })
+                    : t("nav.notifications")
+                }
+              >
+                <Bell className="h-6 w-6" aria-hidden />
+                <NavBadge
+                  count={notificationsUnread}
+                  className="right-0.5 top-1"
+                />
+              </Link>
+              <Link
+                to="/messages"
+                className={topIcon}
+                activeOptions={{ exact: false }}
+                aria-label={
+                  dmUnread > 0
+                    ? t("nav.messagesUnread", { count: dmUnread })
+                    : t("nav.messages")
+                }
+              >
+                <MessageCircle className="h-6 w-6" aria-hidden />
+                <NavBadge count={dmUnread} className="right-0.5 top-1" />
+              </Link>
+            </div>
           </div>
-        </div>
-      </header>
+        </header>
 
-      <main
-        id="main"
-        // pb-28 on phones keeps the last element clear of the fixed bottom
-        // bar; md: drops it because the bar is hidden there.
-        className="mx-auto w-full max-w-7xl flex-1 px-4 pb-28 pt-6 sm:px-6 md:pb-8 md:pt-8"
-      >
-        <Outlet />
-      </main>
+        <main
+          id="main"
+          // pb-24 on phones keeps the last element clear of the fixed bottom
+          // bar; md: drops it because the bar is hidden there.
+          className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-4 sm:px-6 md:pb-8 md:pt-8"
+        >
+          <Outlet />
+        </main>
+      </div>
 
-      <BottomNav dmUnread={dmUnread} />
+      <BottomNav profileName={name} profileAvatarUrl={profileAvatarUrl} />
     </div>
   );
 }
