@@ -6,7 +6,7 @@ import {
   useRouter,
   useRouterState,
 } from "@tanstack/react-router";
-import { Bell, MessageCircle } from "lucide-react";
+import { Bell, MessageCircle, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { BottomNav } from "../components/BottomNav";
@@ -146,6 +146,14 @@ function AuthedLayout() {
             </Link>
 
             <div className="flex items-center">
+              <Link
+                to="/search"
+                className={topIcon}
+                activeOptions={{ exact: false }}
+                aria-label={t("nav.search")}
+              >
+                <Search className="h-6 w-6" aria-hidden />
+              </Link>
               <Link
                 to="/notifications"
                 className={topIcon}

@@ -10,6 +10,7 @@ import {
   Search,
   Shield,
   SquarePlus,
+  Store,
   Users,
 } from "lucide-react";
 
@@ -31,6 +32,7 @@ export type NavItem = {
     | "/notifications"
     | "/donate"
     | "/new"
+    | "/search"
     | "/admin";
   key: string;
   Icon: LucideIcon;
@@ -41,7 +43,8 @@ export type NavItem = {
 /** Everything, in sidebar order. */
 export const NAV_ITEMS: readonly NavItem[] = [
   { to: "/feed", key: "nav.feed", Icon: House },
-  { to: "/venues", key: "nav.venues", Icon: Search },
+  { to: "/search", key: "nav.search", Icon: Search },
+  { to: "/venues", key: "nav.venues", Icon: Store },
   { to: "/meetups", key: "nav.meetups", Icon: CalendarCheck },
   { to: "/new", key: "nav.create", Icon: SquarePlus },
   { to: "/people", key: "nav.people", Icon: Users },

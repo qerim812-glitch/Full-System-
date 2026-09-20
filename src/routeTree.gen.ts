@@ -31,6 +31,7 @@ import { Route as AuthedNewRouteImport } from './routes/_authed/new'
 import { Route as AuthedNotificationsRouteImport } from './routes/_authed/notifications'
 import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
 import { Route as AuthedResetPasswordRouteImport } from './routes/_authed/reset-password'
+import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
 import { Route as ApiBmcWebhookRouteImport } from './routes/api/bmc-webhook'
 import { Route as ApiPushDispatchRouteImport } from './routes/api/push-dispatch'
@@ -150,6 +151,11 @@ const AuthedResetPasswordRoute = AuthedResetPasswordRouteImport.update({
   path: '/reset-password',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedSearchRoute = AuthedSearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedVenuesRoute = AuthedVenuesRouteImport.update({
   id: '/venues',
   path: '/venues',
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
+  '/search': typeof AuthedSearchRoute
   '/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
@@ -250,6 +257,7 @@ export interface FileRoutesByTo {
   '/notifications': typeof AuthedNotificationsRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
+  '/search': typeof AuthedSearchRoute
   '/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
@@ -284,6 +292,7 @@ export interface FileRoutesById {
   '/_authed/notifications': typeof AuthedNotificationsRoute
   '/_authed/people': typeof AuthedPeopleRoute
   '/_authed/reset-password': typeof AuthedResetPasswordRoute
+  '/_authed/search': typeof AuthedSearchRoute
   '/_authed/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
@@ -318,6 +327,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/people'
     | '/reset-password'
+    | '/search'
     | '/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
@@ -350,6 +360,7 @@ export interface FileRouteTypes {
     | '/notifications'
     | '/people'
     | '/reset-password'
+    | '/search'
     | '/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
@@ -383,6 +394,7 @@ export interface FileRouteTypes {
     | '/_authed/notifications'
     | '/_authed/people'
     | '/_authed/reset-password'
+    | '/_authed/search'
     | '/_authed/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
@@ -566,6 +578,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedResetPasswordRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/search': {
+      id: '/_authed/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof AuthedSearchRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/venues': {
       id: '/_authed/venues'
       path: '/venues'
@@ -645,6 +664,7 @@ interface AuthedRouteChildren {
   AuthedNotificationsRoute: typeof AuthedNotificationsRoute
   AuthedPeopleRoute: typeof AuthedPeopleRoute
   AuthedResetPasswordRoute: typeof AuthedResetPasswordRoute
+  AuthedSearchRoute: typeof AuthedSearchRoute
   AuthedVenuesRoute: typeof AuthedVenuesRoute
   AuthedMeetupsMeetupIdRoute: typeof AuthedMeetupsMeetupIdRoute
   AuthedMessagesUserIdRoute: typeof AuthedMessagesUserIdRoute
@@ -666,6 +686,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedNotificationsRoute: AuthedNotificationsRoute,
   AuthedPeopleRoute: AuthedPeopleRoute,
   AuthedResetPasswordRoute: AuthedResetPasswordRoute,
+  AuthedSearchRoute: AuthedSearchRoute,
   AuthedVenuesRoute: AuthedVenuesRoute,
   AuthedMeetupsMeetupIdRoute: AuthedMeetupsMeetupIdRoute,
   AuthedMessagesUserIdRoute: AuthedMessagesUserIdRoute,
