@@ -127,6 +127,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
             ]
           : []),
         { name: "theme-color", content: "#232633" },
+        // Installable on iPhone/iPad from Safari's Share → Add to Home Screen.
+        { name: "apple-mobile-web-app-capable", content: "yes" },
+        { name: "mobile-web-app-capable", content: "yes" },
+        { name: "apple-mobile-web-app-title", content: "Social Circle" },
+        {
+          name: "apple-mobile-web-app-status-bar-style",
+          content: "black-translucent",
+        },
       ],
       links: [
         {

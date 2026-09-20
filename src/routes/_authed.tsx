@@ -10,6 +10,7 @@ import { Bell, MessageCircle, Search } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { BottomNav } from "../components/BottomNav";
+import { InstallApp } from "../components/InstallApp";
 import { Logo } from "../components/Logo";
 import { NavBadge } from "../components/NavBadge";
 import { SIDENAV_OFFSET, SideNav } from "../components/SideNav";
@@ -201,6 +202,7 @@ function AuthedLayout() {
           // bar; md: drops it because the bar is hidden there.
           className="mx-auto w-full max-w-7xl flex-1 px-4 pb-24 pt-4 sm:px-6 md:pb-8 md:pt-8"
         >
+          <InstallApp variant="banner" className="mb-4 md:hidden" />
           <Outlet />
         </main>
       </div>

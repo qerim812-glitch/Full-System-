@@ -1,20 +1,47 @@
 {
-  "name": "Social Circle — book a table across Tirana",
+  "id": "/",
+  "name": "Social Circle",
   "short_name": "Social Circle",
-  "description": "Reserve a table at cafés and lounges across Tirana, see who's going and chat with them.",
-  "start_url": "/venues",
+  "description": "Meet people and go out in Tirana: book a table, host a meetup, see who's going and chat with them.",
+  "start_url": "/feed",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
   "background_color": "#f5f4f0",
   "theme_color": "#232633",
-  "lang": "en",
+  "lang": "sq",
+  "categories": ["social", "lifestyle", "food"],
   "icons": [
     { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tonight",
+      "url": "/feed",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Venues",
+      "url": "/venues",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Meetups",
+      "url": "/meetups",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "New post",
+      "url": "/new",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AccountLinks } from "../../components/AccountLinks";
+import { InstallApp } from "../../components/InstallApp";
 import { InviteCard } from "../../components/InviteCard";
 import { fetchMyReferral } from "../../lib/referrals";
 import { Route as authedRoute } from "../_authed";
@@ -303,6 +304,8 @@ function AccountPage() {
         isOwner={isOwner}
         onSignOut={handleSignOut}
       />
+
+      <InstallApp />
 
       {referral ? <InviteCard referral={referral} /> : null}
 

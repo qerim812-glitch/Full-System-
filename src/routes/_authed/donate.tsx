@@ -129,6 +129,28 @@ function DonatePage() {
         subtitle="Social Circle is free to use. Donations cover the servers and keep it that way."
       />
 
+      {/* Why donate, from the people behind it. Not autoplayed: a video
+          that starts on its own, with sound, on a donations page reads as
+          pressure. Preloads only metadata so the page stays light. */}
+      <section
+        className="overflow-hidden rounded-2xl border border-border bg-black shadow-sm"
+        aria-label="A word from the team"
+      >
+        <video
+          controls
+          playsInline
+          preload="metadata"
+          poster="/og-image.png"
+          className="aspect-video w-full"
+        >
+          <source src="/video/donate.mp4" type="video/mp4" />
+          Your browser cannot play this video.{" "}
+          <a href="/video/donate.mp4" className="underline">
+            Download it instead.
+          </a>
+        </video>
+      </section>
+
       <div className="flex flex-wrap gap-4">
         <StatChip label="Recorded" value={String(donations.length)} />
         <StatChip
