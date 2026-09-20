@@ -31,6 +31,7 @@ export const REPORT_TARGET_KINDS = [
   "venue",
   "post",
   "post_comment",
+  "meetup_message",
 ] as const;
 
 export type ReportTargetKind = (typeof REPORT_TARGET_KINDS)[number];
@@ -42,6 +43,7 @@ const CONTENT_TARGET_KINDS: readonly ReportTargetKind[] = [
   "review",
   "post",
   "post_comment",
+  "meetup_message",
 ];
 
 /**

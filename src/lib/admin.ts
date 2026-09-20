@@ -204,10 +204,11 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
     const chatIds = idsOfKind("chat_message");
     const postIds = idsOfKind("post");
     const postCommentIds = idsOfKind("post_comment");
+    const meetupMessageIds = idsOfKind("meetup_message");
 
     const none = Promise.resolve({ data: [], error: null });
-    const [reviewRows, chatRows, postRows, postCommentRows] = await Promise.all(
-      [
+    const [reviewRows, chatRows, postRows, postCommentRows, meetupMsgRows] =
+      await Promise.all([
         reviewIds.length > 0
           ? supabase.from("reviews").select("id, comment").in("id", reviewIds)
           : none,
@@ -226,8 +227,13 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
               .select("id, body")
               .in("id", postCommentIds)
           : none,
-      ],
-    );
+        meetupMessageIds.length > 0
+          ? supabase
+              .from("meetup_messages")
+              .select("id, body")
+              .in("id", meetupMessageIds)
+          : none,
+      ]);
 
     const targetBodies = new Map<string, string | null>();
     for (const row of (reviewRows.data ?? []) as Record<string, unknown>[]) {
@@ -243,10 +249,10 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
         row["photo_url"] ? `${body} [photo: ${row["photo_url"]}]`.trim() : body,
       );
     }
-    for (const row of (postCommentRows.data ?? []) as Record<
-      string,
-      unknown
-    >[]) {
+    for (const row of [
+      ...((postCommentRows.data ?? []) as Record<string, unknown>[]),
+      ...((meetupMsgRows.data ?? []) as Record<string, unknown>[]),
+    ]) {
       targetBodies.set(row["id"] as string, (row["body"] as string) ?? "");
     }
 
@@ -261,7 +267,8 @@ export const fetchReportQueue = createServerFn({ method: "GET" }).handler(
         targetKind === "review" ||
         targetKind === "chat_message" ||
         targetKind === "post" ||
-        targetKind === "post_comment";
+        targetKind === "post_comment" ||
+        targetKind === "meetup_message";
 
       return {
         ...r,
@@ -1189,7 +1196,7 @@ export const fetchModerationFeed = createServerFn({ method: "GET" })
   });
 
 const hideSchema = z.object({
-  kind: z.enum(["review", "chat", "post", "post_comment"]),
+  kind: z.enum(["review", "chat", "post", "post_comment", "meetup_message"]),
   id: z.string().min(1),
   hidden: z.boolean(),
 });
@@ -1199,6 +1206,7 @@ const HIDE_TABLES = {
   chat: "chat_messages",
   post: "posts",
   post_comment: "post_comments",
+  meetup_message: "meetup_messages",
 } as const;
 
 /** Hide or restore a review / chat message / post / comment. Uses the admin FOR ALL policies. */

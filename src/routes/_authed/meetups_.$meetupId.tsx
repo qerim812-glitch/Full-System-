@@ -13,6 +13,7 @@ import { toast } from "sonner";
 
 import { Avatar } from "../../components/Avatar";
 import { ConfirmButton } from "../../components/ConfirmButton";
+import { MeetupChat } from "../../components/meetup/MeetupChat";
 import {
   BackLink,
   PageHeader,
@@ -437,6 +438,15 @@ function MeetupDetailPage() {
           ))}
         </ul>
       </section>
+
+      {meetup.isHost || meetup.myStatus === "joined" ? (
+        <MeetupChat
+          meetupId={meetup.id}
+          venueSlug={meetup.venue_slug}
+          going={meetup.going}
+          readOnly={meetup.status === "cancelled"}
+        />
+      ) : null}
     </div>
   );
 }
