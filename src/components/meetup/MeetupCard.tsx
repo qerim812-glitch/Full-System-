@@ -1,8 +1,9 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, Lock, MapPin, Users } from "lucide-react";
+import { Clock, Lock, MapPin, Repeat, Users } from "lucide-react";
 
 import {
   joinPolicyLabel,
+  recurrenceLabel,
   seatsLeft,
   type MeetupSummary,
 } from "../../lib/meetups";
@@ -53,6 +54,12 @@ export function MeetupCard({ meetup }: { meetup: MeetupSummary }) {
             <Users className="h-3.5 w-3.5" aria-hidden />
             {meetup.going} of {meetup.capacity} going
           </span>
+          {meetup.recurrence !== "none" ? (
+            <span className="flex items-center gap-1.5">
+              <Repeat className="h-3.5 w-3.5" aria-hidden />
+              {recurrenceLabel(meetup.recurrence)}
+            </span>
+          ) : null}
           {meetup.visibility === "connections" ? (
             <span className="flex items-center gap-1.5">
               <Lock className="h-3.5 w-3.5" aria-hidden />

@@ -4,11 +4,14 @@ import { toast } from "sonner";
 
 import {
   JOIN_POLICIES,
+  RECURRENCES,
   VISIBILITIES,
   createMeetup,
   joinPolicyLabel,
+  recurrenceLabel,
   visibilityLabel,
   type JoinPolicy,
+  type Recurrence,
   type Visibility,
 } from "../../lib/meetups";
 import { todayInTirana } from "../../lib/utils";
@@ -50,6 +53,7 @@ export function CreateMeetupDialog({ venues }: { venues: Venue[] }) {
   const [capacity, setCapacity] = useState(4);
   const [joinPolicy, setJoinPolicy] = useState<JoinPolicy>("open");
   const [visibility, setVisibility] = useState<Visibility>("public");
+  const [recurrence, setRecurrence] = useState<Recurrence>("none");
 
   const venue = venues.find((v) => v.slug === venueSlug);
 
@@ -67,6 +71,7 @@ export function CreateMeetupDialog({ venues }: { venues: Venue[] }) {
           capacity,
           joinPolicy,
           visibility,
+          recurrence,
         },
       });
       if (!result.ok) {
@@ -227,6 +232,32 @@ export function CreateMeetupDialog({ venues }: { venues: Venue[] }) {
                 </Chip>
               ))}
             </div>
+          </fieldset>
+
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="text-xs font-medium text-foreground">
+              Does it repeat?
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {RECURRENCES.map((option) => (
+                <Chip
+                  key={option}
+                  active={recurrence === option}
+                  onClick={() => setRecurrence(option)}
+                  className="px-3 py-1.5 text-xs"
+                >
+                  {option === "none"
+                    ? "One-off"
+                    : recurrenceLabel(option).replace("Repeats ", "")}
+                </Chip>
+              ))}
+            </div>
+            {recurrence !== "none" ? (
+              <p className="text-xs text-muted-foreground">
+                Each one is a real booking, so after this meetup you schedule
+                the next with one tap and last time's guests are told.
+              </p>
+            ) : null}
           </fieldset>
 
           <div className="flex flex-col gap-1.5">

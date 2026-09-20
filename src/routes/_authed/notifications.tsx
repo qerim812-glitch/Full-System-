@@ -1,11 +1,19 @@
 import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import {
+  AlarmClock,
   Bell,
   CalendarCheck,
+  CalendarX,
   EyeOff,
+  Gift,
+  Heart,
   MapPin,
+  MessageCircle,
+  Repeat,
   UserCheck,
+  UserMinus,
   UserPlus,
+  Users,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -36,6 +44,17 @@ const ICONS: Record<NotificationKind, typeof Bell> = {
   connection_checkin: MapPin,
   review_hidden: EyeOff,
   system: Bell,
+  meetup_join_request: UserPlus,
+  meetup_approved: UserCheck,
+  meetup_declined: UserMinus,
+  meetup_joined: Users,
+  meetup_cancelled: CalendarX,
+  post_like: Heart,
+  post_comment: MessageCircle,
+  booking_reminder: AlarmClock,
+  meetup_reminder: AlarmClock,
+  meetup_repeat: Repeat,
+  referral_joined: Gift,
 };
 
 function NotificationsPage() {

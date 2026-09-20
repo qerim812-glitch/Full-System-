@@ -36,6 +36,10 @@ export type SuggestedPerson = {
 export type FeedData = {
   today: string;
   myInterests: string[];
+  /** Accepted connections, for ranking meetups by who else is going. */
+  connectionIds: string[];
+  /** Favourited venue slugs, for ranking meetups by where they are. */
+  favouriteSlugs: string[];
   connectionCheckins: FeedCheckin[];
   suggested: SuggestedPerson[];
 };
@@ -54,6 +58,8 @@ export const fetchFeed = createServerFn({ method: "GET" }).handler(
     const empty: FeedData = {
       today,
       myInterests: [],
+      connectionIds: [],
+      favouriteSlugs: [],
       connectionCheckins: [],
       suggested: [],
     };
@@ -84,26 +90,30 @@ export const fetchFeed = createServerFn({ method: "GET" }).handler(
       )
       .filter((id): id is string => Boolean(id) && id !== user.id);
 
-    const [checkinResult, suggestedResult] = await Promise.all([
-      connectionIds.length > 0
-        ? supabase
-            .from("presence_checkins")
-            .select("user_id, venue_slug, checkin_date, note")
-            .in("user_id", connectionIds)
-            .gte("checkin_date", today)
-            .order("checkin_date", { ascending: true })
-            .limit(30)
-        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-      // `overlaps` is the array && operator, which is what the GIN index on
-      // profiles.interests (0019) exists to serve.
-      myInterests.length > 0
-        ? supabase
-            .from("public_profiles")
-            .select("id, display_name, avatar_url, interests, is_verified")
-            .overlaps("interests", myInterests)
-            .limit(40)
-        : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
-    ]);
+    const [checkinResult, suggestedResult, favouriteResult] = await Promise.all(
+      [
+        connectionIds.length > 0
+          ? supabase
+              .from("presence_checkins")
+              .select("user_id, venue_slug, checkin_date, note")
+              .in("user_id", connectionIds)
+              .gte("checkin_date", today)
+              .order("checkin_date", { ascending: true })
+              .limit(30)
+          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        // `overlaps` is the array && operator, which is what the GIN index on
+        // profiles.interests (0019) exists to serve.
+        myInterests.length > 0
+          ? supabase
+              .from("public_profiles")
+              .select("id, display_name, avatar_url, interests, is_verified")
+              .overlaps("interests", myInterests)
+              .limit(40)
+          : Promise.resolve({ data: [] as Array<Record<string, unknown>> }),
+        // "favorites: manage own" scopes this to the caller.
+        supabase.from("favorites").select("venue_slug"),
+      ],
+    );
 
     const checkinRows = (checkinResult.data ?? []) as Array<
       Record<string, unknown>
@@ -142,6 +152,10 @@ export const fetchFeed = createServerFn({ method: "GET" }).handler(
     return {
       today,
       myInterests,
+      connectionIds,
+      favouriteSlugs: (
+        (favouriteResult.data ?? []) as Array<Record<string, unknown>>
+      ).map((f) => f["venue_slug"] as string),
       connectionCheckins: checkinRows.map((row) => {
         const userId = row["user_id"] as string;
         const profile = profileById.get(userId);

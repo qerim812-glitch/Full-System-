@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { json, rejectUnlessCron } from "../../lib/cron";
 import { getSupabaseServiceRoleClient } from "../../lib/supabase/service-role";
 
 /**
@@ -30,44 +31,19 @@ type Subscription = {
   auth: string;
 };
 
-function json(body: Record<string, unknown>, status: number): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-/** Constant-time compare, so the secret cannot be guessed a character at a time. */
-function secretMatches(provided: string, expected: string): boolean {
-  if (provided.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < provided.length; i += 1) {
-    diff |= provided.charCodeAt(i) ^ expected.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
 const BATCH = 100;
 
 async function dispatch(request: Request): Promise<Response> {
-  const secret = process.env["PUSH_DISPATCH_SECRET"];
+  // Fails closed: an unauthenticated endpoint running as service role would
+  // be able to read every member's notifications. See src/lib/cron.ts.
+  const rejected = rejectUnlessCron(request);
+  if (rejected) return rejected;
+
   const publicKey = process.env["VITE_VAPID_PUBLIC_KEY"];
   const privateKey = process.env["VAPID_PRIVATE_KEY"];
   const subject = process.env["VAPID_SUBJECT"];
-
-  if (!secret) {
-    // Fails closed. An unauthenticated endpoint running as service role would
-    // be able to read every member's notifications.
-    return json({ error: "PUSH_DISPATCH_SECRET is not configured" }, 501);
-  }
   if (!publicKey || !privateKey || !subject) {
     return json({ error: "VAPID keys are not configured" }, 501);
-  }
-
-  const header = request.headers.get("authorization") ?? "";
-  const provided = header.replace(/^Bearer\s+/i, "");
-  if (!provided || !secretMatches(provided, secret)) {
-    return json({ error: "Unauthorised" }, 401);
   }
 
   // Imported lazily so the library is not pulled into the bundle on

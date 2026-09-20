@@ -9,7 +9,18 @@ export type NotificationKind =
   | "booking_updated"
   | "connection_checkin"
   | "review_hidden"
-  | "system";
+  | "system"
+  | "meetup_join_request"
+  | "meetup_approved"
+  | "meetup_declined"
+  | "meetup_joined"
+  | "meetup_cancelled"
+  | "post_like"
+  | "post_comment"
+  | "booking_reminder"
+  | "meetup_reminder"
+  | "meetup_repeat"
+  | "referral_joined";
 
 export type Notification = {
   id: number;

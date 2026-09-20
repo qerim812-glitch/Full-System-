@@ -4,6 +4,7 @@ import {
   Clock,
   Lock,
   MapPin,
+  Repeat,
   Share2,
   UserMinus,
   Users,
@@ -33,6 +34,7 @@ import {
   joinPolicyLabel,
   leaveMeetup,
   respondToJoinRequest,
+  scheduleNextMeetup,
   seatsLeft,
   visibilityLabel,
 } from "../../lib/meetups";
@@ -281,6 +283,33 @@ function MeetupDetailPage() {
                 Share my plans
               </button>
             </>
+          ) : null}
+
+          {meetup.isHost &&
+          meetup.recurrence !== "none" &&
+          meetup.status !== "cancelled" ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                void run(async () => {
+                  const result = await scheduleNextMeetup({
+                    data: { id: meetup.id },
+                  });
+                  if (result.ok && result.id) {
+                    await router.navigate({
+                      to: "/meetups/$meetupId",
+                      params: { meetupId: result.id },
+                    });
+                  }
+                  return result;
+                }, "Next one booked — last time's guests have been told.")
+              }
+              className={pillClass("gap-1.5")}
+            >
+              <Repeat className="h-4 w-4" aria-hidden />
+              Schedule the next one
+            </button>
           ) : null}
 
           {meetup.isHost && meetup.status === "open" ? (

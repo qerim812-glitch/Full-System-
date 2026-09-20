@@ -4,6 +4,8 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AccountLinks } from "../../components/AccountLinks";
+import { InviteCard } from "../../components/InviteCard";
+import { fetchMyReferral } from "../../lib/referrals";
 import { Route as authedRoute } from "../_authed";
 import { Avatar } from "../../components/Avatar";
 import { ConfirmButton } from "../../components/ConfirmButton";
@@ -46,12 +48,13 @@ import { ageFromDob, formatBookingDate, formatDate } from "../../lib/utils";
 
 export const Route = createFileRoute("/_authed/account")({
   loader: async () => {
-    const [profile, blocks, verification] = await Promise.all([
+    const [profile, blocks, verification, referral] = await Promise.all([
       fetchMyProfile(),
       fetchMyBlocks(),
       fetchMyVerification(),
+      fetchMyReferral(),
     ]);
-    return { profile, blocks, verification };
+    return { profile, blocks, verification, referral };
   },
   head: () => pageHead("Account", undefined, { noindex: true }),
   pendingComponent: () => (
@@ -69,7 +72,7 @@ export const Route = createFileRoute("/_authed/account")({
 type Status = { kind: "ok" | "err"; text: string } | null;
 
 function AccountPage() {
-  const { profile, blocks, verification } = Route.useLoaderData();
+  const { profile, blocks, verification, referral } = Route.useLoaderData();
   const { user } = Route.useRouteContext();
   const { isOwner } = authedRoute.useLoaderData();
   const router = useRouter();
@@ -300,6 +303,8 @@ function AccountPage() {
         isOwner={isOwner}
         onSignOut={handleSignOut}
       />
+
+      {referral ? <InviteCard referral={referral} /> : null}
 
       {!profile ? (
         <NoProfileCard onFixed={() => router.invalidate()} />

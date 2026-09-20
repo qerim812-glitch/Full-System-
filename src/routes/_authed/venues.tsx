@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { LocateFixed } from "lucide-react";
 import { useState } from "react";
 
 import { EmptyState } from "../../components/EmptyState";
@@ -15,6 +16,7 @@ import {
 import { StatChip } from "../../components/StatChip";
 import { VenueCard } from "../../components/VenueCard";
 import { VenueMap, type MapPin } from "../../components/VenueMap";
+import { useGeolocation } from "../../hooks/use-geolocation";
 import { fetchMyFavorites } from "../../lib/favorites";
 import { fetchMyProfile } from "../../lib/profile";
 import { pageHead } from "../../lib/seo";
@@ -23,6 +25,7 @@ import {
   filterVenues,
   sortVenues,
   VENUE_CATEGORIES,
+  venueDistanceKm,
   type AgeFilter,
   type VenueSort,
 } from "../../lib/venue-filters";
@@ -73,10 +76,17 @@ function VenuesPage() {
   const [sort, setSort] = useState<VenueSort>("name");
   const [view, setView] = useState<"list" | "map">("list");
   const favoriteSet = new Set(favorites);
+  const geo = useGeolocation();
+
+  function nearMe() {
+    setSort("distance");
+    if (!geo.point) geo.request();
+  }
 
   const visible = sortVenues(
     filterVenues(venues, { query, minCapacity: minCap, age, myAge, category }),
     sort,
+    geo.point,
   );
 
   const rated = venues.filter((v) => v.average_rating !== null);
@@ -149,15 +159,45 @@ function VenuesPage() {
             Sort
             <select
               value={sort}
-              onChange={(e) => setSort(e.target.value as VenueSort)}
+              onChange={(e) => {
+                const next = e.target.value as VenueSort;
+                if (next === "distance") nearMe();
+                else setSort(next);
+              }}
               className="h-10 rounded-full border border-border bg-card px-3 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="name">Name</option>
               <option value="rating">Highest rated</option>
               <option value="capacity">Largest</option>
+              <option value="distance">Nearest</option>
             </select>
           </label>
+
+          <button
+            type="button"
+            onClick={nearMe}
+            aria-pressed={sort === "distance"}
+            className={
+              sort === "distance"
+                ? "inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-4 text-xs font-semibold text-primary-foreground"
+                : "inline-flex h-10 items-center gap-1.5 rounded-full border border-border bg-card px-4 text-xs font-medium text-muted-foreground shadow-sm hover:text-foreground"
+            }
+          >
+            <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+            {geo.status === "asking" ? "Locating…" : "Near me"}
+          </button>
         </div>
+
+        {sort === "distance" && geo.status === "denied" ? (
+          <p className="text-xs text-muted-foreground">
+            Location is blocked for this site, so venues are in name order.
+            Allow location in your browser settings to sort by distance.
+          </p>
+        ) : sort === "distance" && geo.status === "unavailable" ? (
+          <p className="text-xs text-muted-foreground">
+            Your device did not share a location, so venues are in name order.
+          </p>
+        ) : null}
 
         {usedCategories.size > 1 ? (
           <div className="flex flex-wrap items-center gap-1.5">
@@ -246,6 +286,7 @@ function VenuesPage() {
               key={venue.slug}
               venue={venue}
               favorited={favoriteSet.has(venue.slug)}
+              distanceKm={venueDistanceKm(venue, geo.point)}
             />
           ))}
         </ul>

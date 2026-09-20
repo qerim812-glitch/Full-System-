@@ -15,6 +15,21 @@ import { getCurrentUser, getSupabaseServerClient } from "./supabase/server";
 
 export const JOIN_POLICIES = ["open", "approval", "connections"] as const;
 export const VISIBILITIES = ["public", "connections"] as const;
+export const RECURRENCES = ["none", "weekly", "biweekly", "monthly"] as const;
+export type Recurrence = (typeof RECURRENCES)[number];
+
+export function recurrenceLabel(recurrence: Recurrence): string {
+  switch (recurrence) {
+    case "weekly":
+      return "Repeats weekly";
+    case "biweekly":
+      return "Repeats every two weeks";
+    case "monthly":
+      return "Repeats monthly";
+    default:
+      return "One-off";
+  }
+}
 
 export type JoinPolicy = (typeof JOIN_POLICIES)[number];
 export type Visibility = (typeof VISIBILITIES)[number];
@@ -34,6 +49,8 @@ export type MeetupSummary = {
   join_policy: JoinPolicy;
   visibility: Visibility;
   status: "open" | "cancelled" | "completed";
+  recurrence: Recurrence;
+  series_id: string | null;
   host_id: string;
   host_name: string | null;
   host_avatar: string | null;
@@ -119,6 +136,7 @@ export const createMeetupSchema = z.object({
     .max(20, "Twenty is the maximum"),
   joinPolicy: z.enum(JOIN_POLICIES).default("open"),
   visibility: z.enum(VISIBILITIES).default("public"),
+  recurrence: z.enum(RECURRENCES).default("none"),
   notes: z.string().trim().max(500).optional(),
 });
 
@@ -230,6 +248,8 @@ async function decorate(
       join_policy: r["join_policy"] as JoinPolicy,
       visibility: r["visibility"] as Visibility,
       status: r["status"] as MeetupSummary["status"],
+      recurrence: ((r["recurrence"] as string | null) ?? "none") as Recurrence,
+      series_id: (r["series_id"] as string | null) ?? null,
       host_id: hostId,
       host_name: (host?.["display_name"] as string | null) ?? null,
       host_avatar: (host?.["avatar_url"] as string | null) ?? null,
@@ -267,7 +287,7 @@ export const fetchMeetups = createServerFn({ method: "GET" })
     let query = supabase
       .from("meetups")
       .select(
-        "id, host_id, venue_slug, location_id, title, description, meet_date, meet_time, capacity, join_policy, visibility, status",
+        "id, host_id, venue_slug, location_id, title, description, meet_date, meet_time, capacity, join_policy, visibility, status, recurrence, series_id",
       )
       .eq("status", "open")
       .gte("meet_date", today)
@@ -308,7 +328,7 @@ export const fetchMeetup = createServerFn({ method: "GET" })
     const { data: row, error } = await supabase
       .from("meetups")
       .select(
-        "id, host_id, venue_slug, location_id, title, description, meet_date, meet_time, capacity, join_policy, visibility, status",
+        "id, host_id, venue_slug, location_id, title, description, meet_date, meet_time, capacity, join_policy, visibility, status, recurrence, series_id",
       )
       .eq("id", data.id)
       .maybeSingle();
@@ -388,10 +408,27 @@ export const createMeetup = createServerFn({ method: "POST" })
       p_join_policy: data.joinPolicy,
       p_visibility: data.visibility,
       p_notes: data.notes ?? null,
+      p_recurrence: data.recurrence,
     });
 
     if (error) {
       console.error("[meetups] create failed:", error.message);
+      return { ok: false as const, error: mapMeetupError(error.message) };
+    }
+    const created = (Array.isArray(row) ? row[0] : row) as Row | null;
+    return { ok: true as const, id: (created?.["id"] as string) ?? null };
+  });
+
+/** Host only: book the next instance of a repeating meetup. */
+export const scheduleNextMeetup = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data }) => {
+    const supabase = getSupabaseServerClient();
+    const { data: row, error } = await supabase.rpc("schedule_next_meetup", {
+      p_meetup_id: data.id,
+    });
+    if (error) {
+      console.error("[meetups] schedule next failed:", error.message);
       return { ok: false as const, error: mapMeetupError(error.message) };
     }
     const created = (Array.isArray(row) ? row[0] : row) as Row | null;

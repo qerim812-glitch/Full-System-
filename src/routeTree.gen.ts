@@ -36,6 +36,7 @@ import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
 import { Route as AuthedVenuesRouteImport } from './routes/_authed/venues'
 import { Route as ApiBmcWebhookRouteImport } from './routes/api/bmc-webhook'
 import { Route as ApiPushDispatchRouteImport } from './routes/api/push-dispatch'
+import { Route as ApiRemindersRouteImport } from './routes/api/reminders'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as AuthedMeetupsMeetupIdRouteImport } from './routes/_authed/meetups_.$meetupId'
 import { Route as AuthedMessagesUserIdRouteImport } from './routes/_authed/messages_.$userId'
@@ -177,6 +178,11 @@ const ApiPushDispatchRoute = ApiPushDispatchRouteImport.update({
   path: '/api/push-dispatch',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiRemindersRoute = ApiRemindersRouteImport.update({
+  id: '/api/reminders',
+  path: '/api/reminders',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -235,6 +241,7 @@ export interface FileRoutesByFullPath {
   '/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
+  '/api/reminders': typeof ApiRemindersRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
@@ -269,6 +276,7 @@ export interface FileRoutesByTo {
   '/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
+  '/api/reminders': typeof ApiRemindersRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/meetups/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/messages/$userId': typeof AuthedMessagesUserIdRoute
@@ -305,6 +313,7 @@ export interface FileRoutesById {
   '/_authed/venues': typeof AuthedVenuesRoute
   '/api/bmc-webhook': typeof ApiBmcWebhookRoute
   '/api/push-dispatch': typeof ApiPushDispatchRoute
+  '/api/reminders': typeof ApiRemindersRoute
   '/auth/callback': typeof AuthCallbackRoute
   '/_authed/meetups_/$meetupId': typeof AuthedMeetupsMeetupIdRoute
   '/_authed/messages_/$userId': typeof AuthedMessagesUserIdRoute
@@ -341,6 +350,7 @@ export interface FileRouteTypes {
     | '/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
+    | '/api/reminders'
     | '/auth/callback'
     | '/meetups/$meetupId'
     | '/messages/$userId'
@@ -375,6 +385,7 @@ export interface FileRouteTypes {
     | '/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
+    | '/api/reminders'
     | '/auth/callback'
     | '/meetups/$meetupId'
     | '/messages/$userId'
@@ -410,6 +421,7 @@ export interface FileRouteTypes {
     | '/_authed/venues'
     | '/api/bmc-webhook'
     | '/api/push-dispatch'
+    | '/api/reminders'
     | '/auth/callback'
     | '/_authed/meetups_/$meetupId'
     | '/_authed/messages_/$userId'
@@ -431,6 +443,7 @@ export interface RootRouteChildren {
   TermsRoute: typeof TermsRoute
   ApiBmcWebhookRoute: typeof ApiBmcWebhookRoute
   ApiPushDispatchRoute: typeof ApiPushDispatchRoute
+  ApiRemindersRoute: typeof ApiRemindersRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
 }
 
@@ -625,6 +638,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPushDispatchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/reminders': {
+      id: '/api/reminders'
+      path: '/api/reminders'
+      fullPath: '/api/reminders'
+      preLoaderRoute: typeof ApiRemindersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth/callback': {
       id: '/auth/callback'
       path: '/auth/callback'
@@ -732,6 +752,7 @@ const rootRouteChildren: RootRouteChildren = {
   TermsRoute: TermsRoute,
   ApiBmcWebhookRoute: ApiBmcWebhookRoute,
   ApiPushDispatchRoute: ApiPushDispatchRoute,
+  ApiRemindersRoute: ApiRemindersRoute,
   AuthCallbackRoute: AuthCallbackRoute,
 }
 export const routeTree = rootRouteImport

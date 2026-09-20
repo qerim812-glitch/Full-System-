@@ -20,6 +20,7 @@ import { fetchFeed } from "../../lib/feed";
 import { fetchMeetups } from "../../lib/meetups";
 import { fetchPosts, fetchStories } from "../../lib/posts";
 import { interestLabel } from "../../lib/profile";
+import { recommendMeetups } from "../../lib/recommend";
 import { pageHead } from "../../lib/seo";
 import { formatBookingDate } from "../../lib/utils";
 
@@ -58,6 +59,11 @@ function FeedPage() {
   const openTonight = tonight.filter(
     (m) => !m.isHost && m.myStatus === null && m.going < m.capacity,
   );
+  const recommended = recommendMeetups(meetups, {
+    sharedInterestHostIds: new Set(feed.suggested.map((p) => p.id)),
+    favouriteSlugs: new Set(feed.favouriteSlugs),
+    connectionIds: new Set(feed.connectionIds),
+  });
 
   const nothingAtAll =
     meetups.length === 0 &&
@@ -98,6 +104,27 @@ function FeedPage() {
           title="Quiet so far"
           body="Nothing is planned yet. Host a meetup, or check in at a venue so your connections know where you'll be."
         />
+      ) : null}
+
+      {recommended.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+            <Sparkles className="h-4 w-4 text-muted-foreground" aria-hidden />
+            Picked for you
+          </h2>
+          <ul className="grid gap-4 md:grid-cols-2">
+            {recommended.map(({ meetup, reasons }) => (
+              <li key={meetup.id} className="flex flex-col gap-1.5">
+                <ul className="contents">
+                  <MeetupCard meetup={meetup} />
+                </ul>
+                <p className="px-1 text-xs text-muted-foreground">
+                  {reasons.join(" · ")}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {tonight.length > 0 ? (

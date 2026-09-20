@@ -44,6 +44,13 @@ const signUpSchema = z.object({
   email: emailSchema,
   password: passwordSchema,
   displayName: z.string().trim().min(2, "Enter your name").max(60).optional(),
+  /** From /register?ref=CODE; resolved to referred_by by handle_new_user(). */
+  referralCode: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]{4,16}$/)
+    .optional(),
   dateOfBirth: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Enter your date of birth")
@@ -149,6 +156,7 @@ export const signUp = createServerFn({ method: "POST" })
         data: {
           date_of_birth: data.dateOfBirth,
           display_name: data.displayName ?? null,
+          referral_code: data.referralCode ?? null,
         },
       },
     });

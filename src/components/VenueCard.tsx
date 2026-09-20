@@ -1,8 +1,12 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, MapPin, Users } from "lucide-react";
+import { Clock, LocateFixed, MapPin, Users } from "lucide-react";
 
 import { formatHours } from "../lib/slots";
-import { categoryLabel, priceBandLabel } from "../lib/venue-filters";
+import {
+  categoryLabel,
+  formatDistance,
+  priceBandLabel,
+} from "../lib/venue-filters";
 import type { Venue } from "../lib/venues";
 import { FavoriteButton } from "./FavoriteButton";
 import { StarRating } from "./StarRating";
@@ -15,10 +19,13 @@ export function VenueCard({
   venue,
   favorited,
   linkToLogin = false,
+  distanceKm = null,
 }: {
   venue: Venue;
   favorited?: boolean;
   linkToLogin?: boolean;
+  /** From the viewer, when they asked for "near me". */
+  distanceKm?: number | null;
 }) {
   const body = (
     <>
@@ -79,6 +86,13 @@ export function VenueCard({
               <MapPin className="h-3.5 w-3.5 shrink-0" aria-hidden />
               <dt className="sr-only">Address</dt>
               <dd className="truncate">{venue.address}</dd>
+            </div>
+          ) : null}
+          {distanceKm !== null ? (
+            <div className="flex items-center gap-1 font-medium text-foreground">
+              <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+              <dt className="sr-only">Distance</dt>
+              <dd>{formatDistance(distanceKm)} away</dd>
             </div>
           ) : null}
         </dl>

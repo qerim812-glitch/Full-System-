@@ -4,7 +4,7 @@
  */
 
 export type AgeFilter = "any" | "me" | "18" | "21" | "u35";
-export type VenueSort = "name" | "rating" | "capacity";
+export type VenueSort = "name" | "rating" | "capacity" | "distance";
 
 type FilterableVenue = {
   name: string;
@@ -15,7 +15,37 @@ type FilterableVenue = {
   category?: string | null;
   average_rating?: number | null;
   review_count?: number | null;
+  lat?: number | null;
+  lng?: number | null;
 };
+
+export type LatLng = { lat: number; lng: number };
+
+/** Great-circle distance in kilometres (haversine). */
+export function distanceKm(a: LatLng, b: LatLng): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/** "350 m" under a kilometre, otherwise "2.4 km". */
+export function formatDistance(km: number): string {
+  return km < 1 ? `${Math.round(km * 100) * 10} m` : `${km.toFixed(1)} km`;
+}
+
+/** Distance from `origin`, or null when the venue has no coordinates. */
+export function venueDistanceKm(
+  venue: { lat?: number | null; lng?: number | null },
+  origin: LatLng | null,
+): number | null {
+  if (!origin || venue.lat == null || venue.lng == null) return null;
+  return distanceKm(origin, { lat: venue.lat, lng: venue.lng });
+}
 
 export function matchesAgeFilter(
   venue: Pick<FilterableVenue, "min_age" | "max_age">,
@@ -67,9 +97,19 @@ export function filterVenues<V extends FilterableVenue>(
 export function sortVenues<V extends FilterableVenue>(
   venues: readonly V[],
   sort: VenueSort,
+  origin: LatLng | null = null,
 ): V[] {
   const copy = [...venues];
   switch (sort) {
+    case "distance": {
+      // Venues without coordinates sink to the bottom rather than vanishing.
+      const far = Number.POSITIVE_INFINITY;
+      return copy.sort(
+        (a, b) =>
+          (venueDistanceKm(a, origin) ?? far) -
+            (venueDistanceKm(b, origin) ?? far) || a.name.localeCompare(b.name),
+      );
+    }
     case "rating":
       return copy.sort(
         (a, b) =>

@@ -5,13 +5,25 @@ import {
   useRouter,
 } from "@tanstack/react-router";
 import { useState } from "react";
+import { z } from "zod";
 
 import { AuthLayout } from "../components/AuthLayout";
 import { Alert, AlertDescription } from "../components/ui/alert";
 import { fetchAuthUser, signUp } from "../lib/auth";
 import { pageHead } from "../lib/seo";
 
+const searchSchema = z.object({
+  ref: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]{4,16}$/)
+    .optional()
+    .catch(undefined),
+});
+
 export const Route = createFileRoute("/register")({
+  validateSearch: (search) => searchSchema.parse(search),
   head: () =>
     pageHead("Create account", "Join Social Circle — for ages 18 and over."),
   beforeLoad: async () => {
@@ -49,6 +61,7 @@ const strengthColors = [
 
 function RegisterPage() {
   const router = useRouter();
+  const { ref } = Route.useSearch();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -87,6 +100,7 @@ function RegisterPage() {
           password,
           dateOfBirth,
           displayName: displayName.trim() || undefined,
+          referralCode: ref,
         },
       });
       if (!result.ok) {
