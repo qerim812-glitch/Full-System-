@@ -63,6 +63,21 @@ export function ReviewList({
               {review.comment}
             </p>
           ) : null}
+          {review.photo_url ? (
+            <a
+              href={review.photo_url}
+              target="_blank"
+              rel="noreferrer noopener"
+              className="mt-3 block w-fit"
+            >
+              <img
+                src={review.photo_url}
+                alt={`Photo from ${review.author_name}'s review`}
+                loading="lazy"
+                className="max-h-56 rounded-xl object-cover"
+              />
+            </a>
+          ) : null}
           <div className="mt-1.5 flex items-center gap-3">
             <time
               dateTime={review.created_at}

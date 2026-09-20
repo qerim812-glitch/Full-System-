@@ -8,9 +8,17 @@ export type Review = {
   venue_slug: string;
   rating: number;
   comment: string | null;
+  photo_url: string | null;
   created_at: string;
   updated_at: string;
 };
+
+const REVIEW_PHOTO_TYPES: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+};
+export const REVIEW_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 
 /**
  * Bounds mirror the CHECK constraints in supabase/migrations/0005_engagement.sql.
@@ -74,7 +82,9 @@ export const fetchMyReview = createServerFn({ method: "GET" })
 
     const { data: row, error } = await supabase
       .from("reviews")
-      .select("id, venue_slug, rating, comment, created_at, updated_at")
+      .select(
+        "id, venue_slug, rating, comment, photo_url, created_at, updated_at",
+      )
       .eq("venue_slug", data.venueSlug)
       .eq("user_id", user.id)
       .maybeSingle();
@@ -141,6 +151,88 @@ export const upsertMyReview = createServerFn({ method: "POST" })
     if (error) {
       console.error("[reviews] upsert failed:", error.message);
       return { ok: false as const, error: mapReviewError(error.message) };
+    }
+    return { ok: true as const };
+  });
+
+/**
+ * Attach a photo to the caller's review of a venue (one per review; a new
+ * upload replaces it). Runs after upsertMyReview, so the review row exists.
+ */
+export const uploadReviewPhoto = createServerFn({ method: "POST" })
+  .validator((data: unknown) => {
+    if (!(data instanceof FormData)) throw new Error("Expected form data");
+    const file = data.get("photo");
+    if (!(file instanceof File)) throw new Error("Choose an image");
+    return {
+      venueSlug: z.string().min(1).max(120).parse(data.get("venueSlug")),
+      file,
+    };
+  })
+  .handler(async ({ data }) => {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const, error: "Please sign in again." };
+    const ext = REVIEW_PHOTO_TYPES[data.file.type];
+    if (!ext) {
+      return { ok: false as const, error: "Use a JPEG, PNG or WebP image." };
+    }
+    if (data.file.size > REVIEW_PHOTO_MAX_BYTES) {
+      return { ok: false as const, error: "Photos must be under 5 MB." };
+    }
+    const supabase = getSupabaseServerClient();
+    const path = `${user.id}/${data.venueSlug}.${ext}`;
+    const bytes = new Uint8Array(await data.file.arrayBuffer());
+    const { error: uploadError } = await supabase.storage
+      .from("review-photos")
+      .upload(path, bytes, {
+        upsert: true,
+        contentType: data.file.type,
+        cacheControl: "3600",
+      });
+    if (uploadError) {
+      console.error("[reviews] photo upload failed:", uploadError.message);
+      return {
+        ok: false as const,
+        error: /bucket not found/i.test(uploadError.message)
+          ? "Photo storage is not set up yet (run migration 0024)."
+          : "Upload failed. Please try again.",
+      };
+    }
+    const publicUrl = supabase.storage.from("review-photos").getPublicUrl(path)
+      .data.publicUrl;
+    const photoUrl = `${publicUrl}?v=${Date.now()}`;
+    const { error } = await supabase
+      .from("reviews")
+      .update({ photo_url: photoUrl })
+      .eq("user_id", user.id)
+      .eq("venue_slug", data.venueSlug);
+    if (error) {
+      console.error("[reviews] photo save failed:", error.message);
+      return { ok: false as const, error: "Could not save the photo." };
+    }
+    return { ok: true as const, photoUrl };
+  });
+
+export const removeReviewPhoto = createServerFn({ method: "POST" })
+  .validator((data: unknown) => venueOnlySchema.parse(data))
+  .handler(async ({ data }) => {
+    const user = await getCurrentUser();
+    if (!user) return { ok: false as const, error: "Please sign in again." };
+    const supabase = getSupabaseServerClient();
+    await supabase.storage
+      .from("review-photos")
+      .remove(
+        Object.values(REVIEW_PHOTO_TYPES).map(
+          (e) => `${user.id}/${data.venueSlug}.${e}`,
+        ),
+      );
+    const { error } = await supabase
+      .from("reviews")
+      .update({ photo_url: null })
+      .eq("user_id", user.id)
+      .eq("venue_slug", data.venueSlug);
+    if (error) {
+      return { ok: false as const, error: "Could not remove the photo." };
     }
     return { ok: true as const };
   });

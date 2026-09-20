@@ -15,7 +15,7 @@ import { cn } from "../lib/utils";
 import { Avatar } from "./Avatar";
 import { LogoMark } from "./Logo";
 import { NavBadge } from "./NavBadge";
-import { ADMIN_ITEM, NAV_ITEMS } from "./nav-items";
+import { ADMIN_ITEM, NAV_ITEMS, OWNER_ITEM } from "./nav-items";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +46,7 @@ export function SideNav({
   dmUnread,
   notificationsUnread,
   isAdmin,
+  isOwner,
   profileName,
   profileAvatarUrl,
   onSignOut,
@@ -53,12 +54,17 @@ export function SideNav({
   dmUnread: number;
   notificationsUnread: number;
   isAdmin: boolean;
+  isOwner: boolean;
   profileName: string;
   profileAvatarUrl: string | null;
   onSignOut: () => void | Promise<void>;
 }) {
   const t = useT();
-  const items = isAdmin ? [...NAV_ITEMS, ADMIN_ITEM] : NAV_ITEMS;
+  const items = [
+    ...NAV_ITEMS,
+    ...(isOwner ? [OWNER_ITEM] : []),
+    ...(isAdmin ? [ADMIN_ITEM] : []),
+  ];
 
   return (
     <aside

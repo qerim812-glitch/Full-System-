@@ -33,6 +33,7 @@ export type NavItem = {
     | "/donate"
     | "/new"
     | "/search"
+    | "/owner"
     | "/admin";
   key: string;
   Icon: LucideIcon;
@@ -64,6 +65,13 @@ export const ADMIN_ITEM: NavItem = {
   to: "/admin",
   key: "nav.admin",
   Icon: Shield,
+};
+
+/** Shown only to members who manage a venue (venue_owners, migration 0024). */
+export const OWNER_ITEM: NavItem = {
+  to: "/owner",
+  key: "nav.owner",
+  Icon: Store,
 };
 
 /**

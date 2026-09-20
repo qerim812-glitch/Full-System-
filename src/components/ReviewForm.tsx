@@ -1,9 +1,16 @@
 import { useRouter } from "@tanstack/react-router";
-import { Star } from "lucide-react";
-import { useState } from "react";
+import { ImagePlus, Star, X } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
-import { deleteMyReview, upsertMyReview, type Review } from "../lib/reviews";
+import {
+  deleteMyReview,
+  removeReviewPhoto,
+  REVIEW_PHOTO_MAX_BYTES,
+  uploadReviewPhoto,
+  upsertMyReview,
+  type Review,
+} from "../lib/reviews";
 import { cn } from "../lib/utils";
 import { ConfirmButton } from "./ConfirmButton";
 import { pillClass, primaryPillClass } from "./PageChrome";
@@ -23,6 +30,64 @@ export function ReviewForm({
   const [hovered, setHovered] = useState<number | null>(null);
   const [comment, setComment] = useState<string>(existing?.comment ?? "");
   const [pending, setPending] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(
+    existing?.photo_url ?? null,
+  );
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > REVIEW_PHOTO_MAX_BYTES) {
+      toast.error("Photos must be under 5 MB.");
+      return;
+    }
+    setPhotoBusy(true);
+    try {
+      // The photo hangs off the review row, so make sure one exists first.
+      if (!existing) {
+        const saved = await upsertMyReview({
+          data: { venueSlug, rating, comment: comment.trim() || undefined },
+        });
+        if (!saved.ok) {
+          toast.error(saved.error);
+          return;
+        }
+      }
+      const form = new FormData();
+      form.append("venueSlug", venueSlug);
+      form.append("photo", file);
+      const result = await uploadReviewPhoto({ data: form });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setPhotoUrl(result.photoUrl);
+      toast.success("Photo added.");
+      await router.invalidate();
+    } catch {
+      toast.error("Upload failed. Please try again.");
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
+
+  async function handleRemovePhoto() {
+    setPhotoBusy(true);
+    try {
+      const result = await removeReviewPhoto({ data: { venueSlug } });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      setPhotoUrl(null);
+      await router.invalidate();
+    } finally {
+      setPhotoBusy(false);
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -134,6 +199,47 @@ export function ReviewForm({
           className="rounded-xl"
         />
         <p className="text-xs text-muted-foreground">{comment.length} / 2000</p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-xs font-medium text-muted-foreground">
+          Photo <span className="text-muted-foreground/60">(optional)</span>
+        </span>
+        {photoUrl ? (
+          <div className="relative w-fit">
+            <img
+              src={photoUrl}
+              alt="Your review photo"
+              className="max-h-48 rounded-xl object-cover"
+            />
+            <button
+              type="button"
+              onClick={() => void handleRemovePhoto()}
+              disabled={photoBusy}
+              className="absolute right-2 top-2 rounded-full bg-black/60 p-1.5 text-white"
+              aria-label="Remove photo"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={(e) => void handlePhoto(e)}
+          className="sr-only"
+          aria-label="Choose a photo for your review"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={photoBusy}
+          className={pillClass("w-fit gap-1.5 text-xs")}
+        >
+          <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+          {photoBusy ? "Uploading…" : photoUrl ? "Change photo" : "Add a photo"}
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">

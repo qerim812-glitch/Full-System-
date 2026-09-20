@@ -17,6 +17,7 @@ import { useRealtime } from "../hooks/use-realtime";
 import { useT } from "../i18n";
 import { fetchAuthUser, signOut } from "../lib/auth";
 import { fetchUnreadCounts, type UnreadCounts } from "../lib/notifications";
+import { fetchOwnedVenueSlugs } from "../lib/owner";
 import { fetchMyProfile } from "../lib/profile";
 import { cn } from "../lib/utils";
 
@@ -33,10 +34,14 @@ export const Route = createFileRoute("/_authed")({
   // navigation, and the Account page's `router.invalidate()` after an avatar
   // change refreshes it at once.
   loader: async () => {
-    const profile = await fetchMyProfile();
+    const [profile, ownedSlugs] = await Promise.all([
+      fetchMyProfile(),
+      fetchOwnedVenueSlugs(),
+    ]);
     return {
       profileName: profile?.display_name ?? null,
       profileAvatarUrl: profile?.avatar_url ?? null,
+      isOwner: ownedSlugs.length > 0,
     };
   },
   staleTime: 5 * 60_000,
@@ -96,7 +101,7 @@ const topIcon =
 
 function AuthedLayout() {
   const { user } = Route.useRouteContext();
-  const { profileName, profileAvatarUrl } = Route.useLoaderData();
+  const { profileName, profileAvatarUrl, isOwner } = Route.useLoaderData();
   const t = useT();
   const router = useRouter();
   const { dmUnread, notificationsUnread } = useUnreadCounts();
@@ -123,6 +128,7 @@ function AuthedLayout() {
         dmUnread={dmUnread}
         notificationsUnread={notificationsUnread}
         isAdmin={user.isAdmin}
+        isOwner={isOwner}
         profileName={name}
         profileAvatarUrl={profileAvatarUrl}
         onSignOut={handleSignOut}

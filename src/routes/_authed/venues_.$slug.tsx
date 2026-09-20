@@ -19,7 +19,9 @@ import { BookingForm } from "../../components/venue/BookingForm";
 import { ReviewList } from "../../components/venue/ReviewList";
 import { SocialFeedPanel } from "../../components/venue/SocialFeedPanel";
 import { PostFeed } from "../../components/post/PostFeed";
+import { VenueGallery } from "../../components/venue/VenueGallery";
 import { fetchMyFavorites } from "../../lib/favorites";
+import { fetchVenuePhotos } from "../../lib/owner";
 import { fetchPosts } from "../../lib/posts";
 import { canReviewVenue, fetchMyReview } from "../../lib/reviews";
 import { pageHead } from "../../lib/seo";
@@ -34,7 +36,7 @@ type Tab = "overview" | "reviews" | "chat" | "going" | "posts";
 export const Route = createFileRoute("/_authed/venues_/$slug")({
   loader: async ({ params }) => {
     const today = todayInTirana();
-    const [detail, favorites, myReview, canReview, myCheckin, posts] =
+    const [detail, favorites, myReview, canReview, myCheckin, posts, photos] =
       await Promise.all([
         fetchVenue({ data: { slug: params.slug } }),
         fetchMyFavorites(),
@@ -42,6 +44,7 @@ export const Route = createFileRoute("/_authed/venues_/$slug")({
         canReviewVenue({ data: { venueSlug: params.slug } }),
         fetchMyCheckin({ data: { venueSlug: params.slug, date: today } }),
         fetchPosts({ data: { scope: "venue", venueSlug: params.slug } }),
+        fetchVenuePhotos({ data: { venueSlug: params.slug } }),
       ]);
     return {
       detail,
@@ -51,6 +54,7 @@ export const Route = createFileRoute("/_authed/venues_/$slug")({
       myCheckin,
       today,
       posts,
+      photos,
     };
   },
   head: ({ loaderData }) => {
@@ -99,8 +103,16 @@ function VenueDetailSkeleton() {
 }
 
 function VenueDetailPage() {
-  const { detail, favorites, myReview, canReview, myCheckin, today, posts } =
-    Route.useLoaderData();
+  const {
+    detail,
+    favorites,
+    myReview,
+    canReview,
+    myCheckin,
+    today,
+    posts,
+    photos,
+  } = Route.useLoaderData();
   const [date, setDate] = useState(today);
   const [activeTab, setActiveTab] = useState<Tab>("overview");
   const tabsId = useId();
@@ -141,6 +153,8 @@ function VenueDetailPage() {
           ) : (
             <div className="aspect-[16/9] w-full rounded-2xl bg-muted shadow-sm" />
           )}
+
+          <VenueGallery photos={photos} venueName={venue.name} />
 
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">

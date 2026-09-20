@@ -1,9 +1,19 @@
 import { useRouter } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import type { z } from "zod";
 
-import { setVenueActive, upsertVenue, type AdminVenue } from "../../lib/admin";
+import {
+  addVenueOwner,
+  fetchVenueOwners,
+  removeVenueOwner,
+  setVenueActive,
+  upsertVenue,
+  venueUpsertSchema,
+  type AdminVenue,
+  type VenueOwner,
+} from "../../lib/admin";
 import { VENUE_CATEGORIES } from "../../lib/venue-filters";
 import { Alert, AlertDescription } from "../ui/alert";
 import { Input } from "../ui/input";
@@ -28,6 +38,7 @@ export function VenuesPanel({
   const [editing, setEditing] = useState<AdminVenue | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [branchesFor, setBranchesFor] = useState<string | null>(null);
+  const [ownersFor, setOwnersFor] = useState<string | null>(null);
 
   return (
     <div className="flex flex-col gap-5">
@@ -112,6 +123,16 @@ export function VenuesPanel({
                   </button>
                   <button
                     type="button"
+                    onClick={() =>
+                      setOwnersFor(ownersFor === venue.slug ? null : venue.slug)
+                    }
+                    className={pillClass("text-xs")}
+                    aria-expanded={ownersFor === venue.slug}
+                  >
+                    Owners
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => {
                       setEditing(venue);
                       setShowForm(true);
@@ -164,6 +185,9 @@ export function VenuesPanel({
               {branchesFor === venue.slug ? (
                 <LocationsPanel venueSlug={venue.slug} />
               ) : null}
+              {ownersFor === venue.slug ? (
+                <OwnersEditor venueSlug={venue.slug} />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -172,14 +196,135 @@ export function VenuesPanel({
   );
 }
 
-function VenueForm({
+/**
+ * Appoint or remove venue owners (members who can edit this venue, its
+ * branches and photos, and see its bookings — see migration 0024).
+ */
+function OwnersEditor({ venueSlug }: { venueSlug: string }) {
+  const [owners, setOwners] = useState<VenueOwner[] | null>(null);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function load() {
+    try {
+      setOwners(await fetchVenueOwners({ data: { venueSlug } }));
+    } catch {
+      toast.error("Could not load owners.");
+      setOwners([]);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venueSlug]);
+
+  async function handleAdd(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || busy) return;
+    setBusy(true);
+    try {
+      const result = await addVenueOwner({ data: { venueSlug, email } });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Owner added");
+      setEmail("");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(userId: string) {
+    setBusy(true);
+    try {
+      const result = await removeVenueOwner({ data: { venueSlug, userId } });
+      if (!result.ok) toast.error(result.error);
+      else toast.success("Owner removed");
+      await load();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4">
+      <h4 className="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        Owners {owners ? `(${owners.length})` : ""}
+      </h4>
+      {owners === null ? (
+        <p className="text-xs text-muted-foreground">Loading…</p>
+      ) : owners.length === 0 ? (
+        <p className="mb-3 text-xs text-muted-foreground">
+          Nobody manages this venue yet. Owners can edit it, manage branches and
+          photos, and see its bookings.
+        </p>
+      ) : (
+        <ul className="mb-3 flex flex-col gap-2">
+          {owners.map((owner) => (
+            <li
+              key={owner.user_id}
+              className="flex flex-wrap items-center gap-3 rounded-xl bg-card px-4 py-2.5 text-sm shadow-sm"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">
+                  {owner.display_name ?? "Member"}
+                </p>
+                <p className="text-xs text-muted-foreground">{owner.email}</p>
+              </div>
+              <ConfirmButton
+                title="Remove this owner?"
+                description="They lose access to the venue dashboard at once."
+                confirmLabel="Remove"
+                onConfirm={() => handleRemove(owner.user_id)}
+                disabled={busy}
+                className={pillClass("text-xs", { danger: true })}
+              >
+                Remove
+              </ConfirmButton>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form onSubmit={handleAdd} className="flex flex-wrap gap-2">
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="member@example.com"
+          aria-label="Owner email"
+          className="max-w-xs rounded-xl"
+        />
+        <button
+          type="submit"
+          disabled={busy || !email.trim()}
+          className={primaryPillClass("text-xs")}
+        >
+          Add owner
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/** Anything that saves a venue payload and reports ok/error. */
+type VenueSave = (opts: {
+  data: z.input<typeof venueUpsertSchema>;
+}) => Promise<{ ok: boolean; error?: string }>;
+
+export function VenueForm({
   initial,
   onClose,
   onSaved,
+  save = upsertVenue,
 }: {
   initial: AdminVenue | null;
   onClose: () => void;
   onSaved: () => void;
+  /** Owners save through their own function; the form is the same. */
+  save?: VenueSave;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +359,7 @@ function VenueForm({
     setBusy(true);
     setError(null);
     try {
-      const result = await upsertVenue({
+      const result = await save({
         data: {
           slug,
           name,
@@ -238,7 +383,7 @@ function VenueForm({
         },
       });
       if (!result.ok) {
-        setError(result.error);
+        setError(result.error ?? "Could not save.");
         return;
       }
       toast.success(isEdit ? "Venue updated" : "Venue created");

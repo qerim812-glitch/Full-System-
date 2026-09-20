@@ -46,6 +46,7 @@ export type VenueReview = {
   id: string;
   rating: number;
   comment: string | null;
+  photo_url: string | null;
   created_at: string;
   user_id: string;
   author_name: string;
@@ -179,7 +180,7 @@ export const fetchVenue = createServerFn({ method: "GET" })
         // embed had no FK to resolve against and silently returned nothing.
         supabase
           .from("reviews")
-          .select("id, rating, comment, created_at, user_id")
+          .select("id, rating, comment, photo_url, created_at, user_id")
           .eq("venue_slug", data.slug)
           .eq("is_hidden", false)
           .order("created_at", { ascending: false })
@@ -200,6 +201,7 @@ export const fetchVenue = createServerFn({ method: "GET" })
       id: string;
       rating: number;
       comment: string | null;
+      photo_url: string | null;
       created_at: string;
       user_id: string;
     }>;

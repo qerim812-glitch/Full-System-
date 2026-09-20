@@ -549,8 +549,25 @@ export type AdminVenue = {
   is_active: boolean;
 };
 
-const ADMIN_VENUE_COLUMNS =
+export const ADMIN_VENUE_COLUMNS =
   "slug, name, description, image_url, location_url, address, phone, category, price_band, opens_at, closes_at, slot_minutes, min_age, max_age, capacity, lat, lng, is_active";
+
+/** Fills defaults for columns older rows may lack; shared with the owner side. */
+export function normaliseAdminVenue(r: Record<string, unknown>): AdminVenue {
+  return {
+    ...(r as unknown as AdminVenue),
+    address: (r["address"] as string | null) ?? null,
+    phone: (r["phone"] as string | null) ?? null,
+    category: (r["category"] as string | null) ?? "cafe",
+    price_band: (r["price_band"] as number | null) ?? 2,
+    opens_at: ((r["opens_at"] as string | null) ?? "18:00").slice(0, 5),
+    closes_at: ((r["closes_at"] as string | null) ?? "23:00").slice(0, 5),
+    slot_minutes: (r["slot_minutes"] as number | null) ?? 60,
+    // numeric(9,6) comes back from PostgREST as a string.
+    lat: r["lat"] === null || r["lat"] === undefined ? null : Number(r["lat"]),
+    lng: r["lng"] === null || r["lng"] === undefined ? null : Number(r["lng"]),
+  };
+}
 
 export const fetchAdminVenues = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminVenue[]> => {
@@ -564,23 +581,125 @@ export const fetchAdminVenues = createServerFn({ method: "GET" }).handler(
       console.error("[admin] fetchAdminVenues failed:", error.message);
       return [];
     }
-    return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
-      ...(r as unknown as AdminVenue),
-      address: (r["address"] as string | null) ?? null,
-      phone: (r["phone"] as string | null) ?? null,
-      category: (r["category"] as string | null) ?? "cafe",
-      price_band: (r["price_band"] as number | null) ?? 2,
-      opens_at: ((r["opens_at"] as string | null) ?? "18:00").slice(0, 5),
-      closes_at: ((r["closes_at"] as string | null) ?? "23:00").slice(0, 5),
-      slot_minutes: (r["slot_minutes"] as number | null) ?? 60,
-      // numeric(9,6) comes back from PostgREST as a string.
-      lat:
-        r["lat"] === null || r["lat"] === undefined ? null : Number(r["lat"]),
-      lng:
-        r["lng"] === null || r["lng"] === undefined ? null : Number(r["lng"]),
-    }));
+    return ((data ?? []) as Record<string, unknown>[]).map(normaliseAdminVenue);
   },
 );
+
+/* ── Venue owners ───────────────────────────────────────────────────────── */
+
+export type VenueOwner = {
+  user_id: string;
+  email: string | null;
+  display_name: string | null;
+};
+
+export const fetchVenueOwners = createServerFn({ method: "GET" })
+  .validator((data: unknown) =>
+    z.object({ venueSlug: z.string().min(1).max(120) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<VenueOwner[]> => {
+    await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: rows, error } = await supabase
+      .from("venue_owners")
+      .select("user_id")
+      .eq("venue_slug", data.venueSlug);
+    if (error) {
+      console.error("[admin] fetchVenueOwners failed:", error.message);
+      return [];
+    }
+    const ids = (rows ?? []).map((r) => r.user_id as string);
+    if (ids.length === 0) return [];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, email, display_name")
+      .in("id", ids);
+    const byId = new Map(
+      ((profiles ?? []) as Record<string, unknown>[]).map((p) => [
+        p["id"] as string,
+        p,
+      ]),
+    );
+    return ids.map((id) => ({
+      user_id: id,
+      email: (byId.get(id)?.["email"] as string | null) ?? null,
+      display_name: (byId.get(id)?.["display_name"] as string | null) ?? null,
+    }));
+  });
+
+/** Appoint a member as owner of a venue, by the email on their profile. */
+export const addVenueOwner = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        venueSlug: z.string().min(1).max(120),
+        email: z.string().trim().toLowerCase().email(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .ilike("email", data.email)
+      .maybeSingle();
+    if (!profile) {
+      return { ok: false as const, error: "No member has that email." };
+    }
+    const { error } = await supabase
+      .from("venue_owners")
+      .upsert(
+        { venue_slug: data.venueSlug, user_id: profile.id as string },
+        { onConflict: "venue_slug,user_id", ignoreDuplicates: true },
+      );
+    if (error) {
+      console.error("[admin] addVenueOwner failed:", error.message);
+      return { ok: false as const, error: "Could not add that owner." };
+    }
+    await audit(
+      supabase,
+      admin.id,
+      "venue.owner.add",
+      "venue",
+      data.venueSlug,
+      { user_id: profile.id as string },
+    );
+    return { ok: true as const };
+  });
+
+export const removeVenueOwner = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        venueSlug: z.string().min(1).max(120),
+        userId: z.string().uuid(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => {
+    const admin = await requireAdmin();
+    const supabase = getSupabaseServerClient();
+    const { error } = await supabase
+      .from("venue_owners")
+      .delete()
+      .eq("venue_slug", data.venueSlug)
+      .eq("user_id", data.userId);
+    if (error) {
+      console.error("[admin] removeVenueOwner failed:", error.message);
+      return { ok: false as const, error: "Could not remove that owner." };
+    }
+    await audit(
+      supabase,
+      admin.id,
+      "venue.owner.remove",
+      "venue",
+      data.venueSlug,
+      { user_id: data.userId },
+    );
+    return { ok: true as const };
+  });
 
 const timeField = z.string().regex(/^\d{2}:\d{2}$/, "Use HH:MM");
 

@@ -6,6 +6,7 @@ import {
   LogOut,
   Moon,
   Shield,
+  Store,
   Sun,
   Users,
 } from "lucide-react";
@@ -32,9 +33,11 @@ const LINKS = [
 
 export function AccountLinks({
   isAdmin,
+  isOwner = false,
   onSignOut,
 }: {
   isAdmin: boolean;
+  isOwner?: boolean;
   onSignOut: () => void | Promise<void>;
 }) {
   const t = useT();
@@ -83,6 +86,25 @@ export function AccountLinks({
               />
             </Link>
           </li>
+
+          {isOwner ? (
+            <li>
+              <Link
+                to="/owner"
+                className="flex min-h-14 items-center gap-3 px-5 py-3.5 text-sm text-foreground transition-colors active:bg-muted"
+              >
+                <Store
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+                <span className="flex-1">{t("nav.owner")}</span>
+                <ChevronRight
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  aria-hidden
+                />
+              </Link>
+            </li>
+          ) : null}
 
           {isAdmin ? (
             <li>

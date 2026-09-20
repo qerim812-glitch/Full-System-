@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { AccountLinks } from "../../components/AccountLinks";
+import { Route as authedRoute } from "../_authed";
 import { Avatar } from "../../components/Avatar";
 import { ConfirmButton } from "../../components/ConfirmButton";
 import {
@@ -70,6 +71,7 @@ type Status = { kind: "ok" | "err"; text: string } | null;
 function AccountPage() {
   const { profile, blocks, verification } = Route.useLoaderData();
   const { user } = Route.useRouteContext();
+  const { isOwner } = authedRoute.useLoaderData();
   const router = useRouter();
 
   const [displayName, setDisplayName] = useState(profile?.display_name ?? "");
@@ -293,7 +295,11 @@ function AccountPage() {
 
       {/* Phone only: the destinations the five-tab bottom bar cannot hold,
           plus sign out. Without this they are unreachable on a phone. */}
-      <AccountLinks isAdmin={user.isAdmin} onSignOut={handleSignOut} />
+      <AccountLinks
+        isAdmin={user.isAdmin}
+        isOwner={isOwner}
+        onSignOut={handleSignOut}
+      />
 
       {!profile ? (
         <NoProfileCard onFixed={() => router.invalidate()} />

@@ -29,6 +29,7 @@ import { Route as AuthedMeetupsRouteImport } from './routes/_authed/meetups'
 import { Route as AuthedMessagesRouteImport } from './routes/_authed/messages'
 import { Route as AuthedNewRouteImport } from './routes/_authed/new'
 import { Route as AuthedNotificationsRouteImport } from './routes/_authed/notifications'
+import { Route as AuthedOwnerRouteImport } from './routes/_authed/owner'
 import { Route as AuthedPeopleRouteImport } from './routes/_authed/people'
 import { Route as AuthedResetPasswordRouteImport } from './routes/_authed/reset-password'
 import { Route as AuthedSearchRouteImport } from './routes/_authed/search'
@@ -141,6 +142,11 @@ const AuthedNotificationsRoute = AuthedNotificationsRouteImport.update({
   path: '/notifications',
   getParentRoute: () => AuthedRoute,
 } as any)
+const AuthedOwnerRoute = AuthedOwnerRouteImport.update({
+  id: '/owner',
+  path: '/owner',
+  getParentRoute: () => AuthedRoute,
+} as any)
 const AuthedPeopleRoute = AuthedPeopleRouteImport.update({
   id: '/people',
   path: '/people',
@@ -222,6 +228,7 @@ export interface FileRoutesByFullPath {
   '/messages': typeof AuthedMessagesRoute
   '/new': typeof AuthedNewRoute
   '/notifications': typeof AuthedNotificationsRoute
+  '/owner': typeof AuthedOwnerRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
   '/search': typeof AuthedSearchRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/messages': typeof AuthedMessagesRoute
   '/new': typeof AuthedNewRoute
   '/notifications': typeof AuthedNotificationsRoute
+  '/owner': typeof AuthedOwnerRoute
   '/people': typeof AuthedPeopleRoute
   '/reset-password': typeof AuthedResetPasswordRoute
   '/search': typeof AuthedSearchRoute
@@ -290,6 +298,7 @@ export interface FileRoutesById {
   '/_authed/messages': typeof AuthedMessagesRoute
   '/_authed/new': typeof AuthedNewRoute
   '/_authed/notifications': typeof AuthedNotificationsRoute
+  '/_authed/owner': typeof AuthedOwnerRoute
   '/_authed/people': typeof AuthedPeopleRoute
   '/_authed/reset-password': typeof AuthedResetPasswordRoute
   '/_authed/search': typeof AuthedSearchRoute
@@ -325,6 +334,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/new'
     | '/notifications'
+    | '/owner'
     | '/people'
     | '/reset-password'
     | '/search'
@@ -358,6 +368,7 @@ export interface FileRouteTypes {
     | '/messages'
     | '/new'
     | '/notifications'
+    | '/owner'
     | '/people'
     | '/reset-password'
     | '/search'
@@ -392,6 +403,7 @@ export interface FileRouteTypes {
     | '/_authed/messages'
     | '/_authed/new'
     | '/_authed/notifications'
+    | '/_authed/owner'
     | '/_authed/people'
     | '/_authed/reset-password'
     | '/_authed/search'
@@ -564,6 +576,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthedNotificationsRouteImport
       parentRoute: typeof AuthedRoute
     }
+    '/_authed/owner': {
+      id: '/_authed/owner'
+      path: '/owner'
+      fullPath: '/owner'
+      preLoaderRoute: typeof AuthedOwnerRouteImport
+      parentRoute: typeof AuthedRoute
+    }
     '/_authed/people': {
       id: '/_authed/people'
       path: '/people'
@@ -662,6 +681,7 @@ interface AuthedRouteChildren {
   AuthedMessagesRoute: typeof AuthedMessagesRoute
   AuthedNewRoute: typeof AuthedNewRoute
   AuthedNotificationsRoute: typeof AuthedNotificationsRoute
+  AuthedOwnerRoute: typeof AuthedOwnerRoute
   AuthedPeopleRoute: typeof AuthedPeopleRoute
   AuthedResetPasswordRoute: typeof AuthedResetPasswordRoute
   AuthedSearchRoute: typeof AuthedSearchRoute
@@ -684,6 +704,7 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedMessagesRoute: AuthedMessagesRoute,
   AuthedNewRoute: AuthedNewRoute,
   AuthedNotificationsRoute: AuthedNotificationsRoute,
+  AuthedOwnerRoute: AuthedOwnerRoute,
   AuthedPeopleRoute: AuthedPeopleRoute,
   AuthedResetPasswordRoute: AuthedResetPasswordRoute,
   AuthedSearchRoute: AuthedSearchRoute,

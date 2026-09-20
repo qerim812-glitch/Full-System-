@@ -14,7 +14,31 @@ import { pillClass, primaryPillClass } from "../PageChrome";
 import { EmptyCard } from "./EmptyCard";
 import { Field } from "./AdminShared";
 
-export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
+/** The three calls the panel needs; admins and venue owners pass their own. */
+type Arg<F> = Parameters<F extends (...a: infer A) => unknown ? F : never>[0];
+export type LocationsApi = {
+  fetch: (opts: Arg<typeof fetchAdminLocations>) => Promise<AdminLocation[]>;
+  upsert: (
+    opts: Arg<typeof upsertLocation>,
+  ) => Promise<{ ok: boolean; error?: string }>;
+  remove: (
+    opts: Arg<typeof deleteLocation>,
+  ) => Promise<{ ok: boolean; error?: string; deactivated?: boolean }>;
+};
+
+const ADMIN_API: LocationsApi = {
+  fetch: fetchAdminLocations,
+  upsert: upsertLocation,
+  remove: deleteLocation,
+};
+
+export function LocationsPanel({
+  venueSlug,
+  api = ADMIN_API,
+}: {
+  venueSlug: string;
+  api?: LocationsApi;
+}) {
   const [locations, setLocations] = useState<AdminLocation[] | null>(null);
   const [editing, setEditing] = useState<AdminLocation | null>(null);
   const [adding, setAdding] = useState(false);
@@ -22,7 +46,7 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
 
   async function load() {
     try {
-      setLocations(await fetchAdminLocations({ data: { venueSlug } }));
+      setLocations(await api.fetch({ data: { venueSlug } }));
     } catch {
       toast.error("Could not load branches.");
       setLocations([]);
@@ -31,7 +55,8 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchAdminLocations({ data: { venueSlug } })
+    api
+      .fetch({ data: { venueSlug } })
       .then((rows) => {
         if (!cancelled) setLocations(rows);
       })
@@ -41,13 +66,13 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
     return () => {
       cancelled = true;
     };
-  }, [venueSlug]);
+  }, [venueSlug, api]);
 
   async function handleDelete(id: string) {
     setBusyId(id);
     try {
-      const result = await deleteLocation({ data: { id } });
-      if (!result.ok) toast.error(result.error);
+      const result = await api.remove({ data: { id } });
+      if (!result.ok) toast.error(result.error ?? "Could not delete.");
       else
         toast.success(
           result.deactivated
@@ -63,7 +88,7 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
   async function handleToggle(loc: AdminLocation) {
     setBusyId(loc.id);
     try {
-      const result = await upsertLocation({
+      const result = await api.upsert({
         data: {
           id: loc.id,
           venueSlug,
@@ -73,7 +98,7 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
           is_active: !loc.is_active,
         },
       });
-      if (!result.ok) toast.error(result.error);
+      if (!result.ok) toast.error(result.error ?? "Could not update.");
       await load();
     } finally {
       setBusyId(null);
@@ -102,6 +127,7 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
       {adding || editing ? (
         <LocationForm
           venueSlug={venueSlug}
+          upsert={api.upsert}
           initial={editing}
           onClose={() => {
             setAdding(false);
@@ -182,11 +208,13 @@ export function LocationsPanel({ venueSlug }: { venueSlug: string }) {
 
 function LocationForm({
   venueSlug,
+  upsert,
   initial,
   onClose,
   onSaved,
 }: {
   venueSlug: string;
+  upsert: LocationsApi["upsert"];
   initial: AdminLocation | null;
   onClose: () => void;
   onSaved: () => void;
@@ -204,7 +232,7 @@ function LocationForm({
     setBusy(true);
     setError(null);
     try {
-      const result = await upsertLocation({
+      const result = await upsert({
         data: {
           ...(initial ? { id: initial.id } : {}),
           venueSlug,
@@ -215,7 +243,7 @@ function LocationForm({
         },
       });
       if (!result.ok) {
-        setError(result.error);
+        setError(result.error ?? "Could not save.");
         return;
       }
       toast.success(initial ? "Branch updated" : "Branch added");
